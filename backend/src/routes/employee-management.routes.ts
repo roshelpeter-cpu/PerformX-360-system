@@ -4,6 +4,7 @@ import { requireRole } from "../middlewares/requireRole.js";
 import { validateBody, validateParams, validateQuery } from "../middlewares/validate.js";
 import { ROLES } from "../constants/roles.js";
 import {
+  changeBatch,
   changeSupervisor,
   getBatchEmployees,
   getEligibleSupervisors,
@@ -19,6 +20,7 @@ import {
   batchIdParamsSchema,
   employeeIdParamsSchema,
   employeeListQuerySchema,
+  reassignBatchSchema,
   reassignSupervisorSchema,
   supervisorIdParamsSchema,
 } from "../validations/employee-management.validation.js";
@@ -74,6 +76,12 @@ employeeManagementRouter.post(
   validateParams(employeeIdParamsSchema),
   validateBody(reassignSupervisorSchema),
   changeSupervisor
+);
+employeeManagementRouter.post(
+  "/:employeeId/batch",
+  validateParams(employeeIdParamsSchema),
+  validateBody(reassignBatchSchema),
+  changeBatch
 );
 employeeManagementRouter.get(
   "/:employeeId",

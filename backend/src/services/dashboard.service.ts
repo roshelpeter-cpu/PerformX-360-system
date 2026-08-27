@@ -9,6 +9,7 @@ import {
   getNotificationsForUser,
   getUnreadNotificationCount,
 } from "./notification.service.js";
+import { getEmployeeAppraisalProgress } from "./appraisal-progress.service.js";
 
 function serializeEmployee(employee: {
   id: string;
@@ -122,10 +123,12 @@ export async function getDashboardForUser(userId: string) {
   const assignment = await loadActiveAssignment(employee.id);
 
   if (employee.role === "EMPLOYEE") {
+    const progress = await getEmployeeAppraisalProgress(employee.id);
     return {
       role: employee.role,
       profile,
       ...assignment,
+      progress,
       notifications,
       unreadCount,
     };

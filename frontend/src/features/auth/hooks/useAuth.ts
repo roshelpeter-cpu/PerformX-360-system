@@ -60,7 +60,7 @@ export function useLogout() {
     mutationFn: logoutRequest,
     onSettled: () => {
       clearAuth();
-      queryClient.removeQueries({ queryKey: ["auth"] });
+      queryClient.clear();
       navigate("/login", { replace: true });
       toast.success("Signed out successfully");
     },

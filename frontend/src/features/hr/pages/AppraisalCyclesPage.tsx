@@ -1,6 +1,5 @@
 // Appraisal Cycles Page
-// Lists appraisal cycles and exposes Draft-only deletion alongside
-// confirm/activate/complete actions.
+// Lists cycles. Confirm/activate/complete/delete remain on the cycle detail page.
 
 import { useMemo, useState, type ReactNode } from "react";
 import {
@@ -17,14 +16,8 @@ import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ActiveCycleSummaryCard from "@/features/hr/components/ActiveCycleSummaryCard";
-import { ActionMenu, fieldClass } from "@/features/hr/components/ActionMenu";
+import { fieldClass } from "@/features/hr/components/ActionMenu";
 import CreateCycleDialog from "@/features/hr/components/CreateCycleDialog";
-import {
-  ActivateCycleDialog,
-  CompleteCycleDialog,
-  ConfirmCycleDialog,
-  DeleteDraftCycleDialog,
-} from "@/features/hr/components/CycleActionDialogs";
 import { StatusBadge } from "@/features/hr/components/StatusBadge";
 import { SupervisorsInSection } from "@/features/hr/components/SupervisorsInSection";
 import {
@@ -33,7 +26,6 @@ import {
   useHistoricalCycles,
   useWorkforceSummary,
 } from "@/features/hr/hooks/useAppraisalCycles";
-import type { AppraisalCycle } from "@/features/hr/types";
 import { formatCompactDateRange, formatDate } from "@/features/hr/utils/dates";
 
 const TABS = [
@@ -41,7 +33,6 @@ const TABS = [
   "Active Cycles",
   "Upcoming Cycles",
   "Completed Cycles",
-  "Archived Cycles",
 ] as const;
 
 const PAGE_SIZE = 5;
@@ -53,11 +44,6 @@ export default function AppraisalCyclesPage() {
   const [year, setYear] = useState("ALL");
   const [page, setPage] = useState(1);
   const [activeTab, setActiveTab] = useState<(typeof TABS)[number]>("All Cycles");
-  const [selected, setSelected] = useState<AppraisalCycle | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [activateOpen, setActivateOpen] = useState(false);
-  const [completeOpen, setCompleteOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const navigate = useNavigate();
 
   const allCyclesQuery = useAppraisalCycles();
@@ -91,8 +77,6 @@ export default function AppraisalCyclesPage() {
       filtered = filtered.filter((cycle) => cycle.status === "UPCOMING");
     } else if (activeTab === "Completed Cycles") {
       filtered = filtered.filter((cycle) => cycle.status === "COMPLETED");
-    } else if (activeTab === "Archived Cycles") {
-      filtered = [];
     }
 
     if (status !== "ALL") {
@@ -116,14 +100,6 @@ export default function AppraisalCyclesPage() {
     (currentPage - 1) * PAGE_SIZE,
     currentPage * PAGE_SIZE
   );
-
-  function openAction(cycle: AppraisalCycle, action: "confirm" | "activate" | "complete" | "delete") {
-    setSelected(cycle);
-    if (action === "confirm") setConfirmOpen(true);
-    if (action === "activate") setActivateOpen(true);
-    if (action === "complete") setCompleteOpen(true);
-    if (action === "delete") setDeleteOpen(true);
-  }
 
   function changeTab(tab: (typeof TABS)[number]) {
     setActiveTab(tab);
@@ -284,8 +260,8 @@ export default function AppraisalCyclesPage() {
                   ) : pagedCycles.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="py-8 text-center text-stone-500">
-                        {activeTab === "Archived Cycles"
-                          ? "No archived cycles."
+                        {activeTab === "Completed Cycles"
+                          ? "No completed cycles."
                           : "No cycles found."}
                       </td>
                     </tr>
@@ -354,52 +330,13 @@ export default function AppraisalCyclesPage() {
                             {formatDate(cycle.endDate)}
                           </td>
                           <td className="px-3 py-4 text-right">
-                            <div className="flex items-center justify-end gap-1">
-                              <Link
-                                to={`/hr/appraisal-cycles/${cycle.id}`}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800"
-                                aria-label={`View ${cycle.name}`}
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Link>
-                              <div className="overflow-hidden rounded-lg border border-stone-200 dark:border-stone-700">
-                                <ActionMenu
-                                  items={[
-                                    {
-                                      label: "View",
-                                      onClick: () =>
-                                        navigate(`/hr/appraisal-cycles/${cycle.id}`),
-                                    },
-                                    {
-                                      label: "Edit draft",
-                                      hidden: cycle.status !== "DRAFT",
-                                      onClick: () =>
-                                        navigate(`/hr/appraisal-cycles/${cycle.id}?tab=settings`),
-                                    },
-                                    {
-                                      label: "Confirm",
-                                      hidden: cycle.status !== "DRAFT",
-                                      onClick: () => openAction(cycle, "confirm"),
-                                    },
-                                    {
-                                      label: "Activate",
-                                      hidden: cycle.status !== "UPCOMING",
-                                      onClick: () => openAction(cycle, "activate"),
-                                    },
-                                    {
-                                      label: "Complete",
-                                      hidden: cycle.status !== "ACTIVE",
-                                      onClick: () => openAction(cycle, "complete"),
-                                    },
-                                    {
-                                      label: "Delete",
-                                      hidden: cycle.status !== "DRAFT",
-                                      onClick: () => openAction(cycle, "delete"),
-                                    },
-                                  ]}
-                                />
-                              </div>
-                            </div>
+                            <Link
+                              to={`/hr/appraisal-cycles/${cycle.id}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50 dark:border-stone-700 dark:hover:bg-stone-800"
+                              aria-label={`View ${cycle.name}`}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Link>
                           </td>
                         </tr>
                       );
@@ -539,30 +476,6 @@ export default function AppraisalCyclesPage() {
       </div>
 
       <CreateCycleDialog open={createOpen} onClose={() => setCreateOpen(false)} />
-      {selected ? (
-        <>
-          <ConfirmCycleDialog
-            cycle={selected}
-            open={confirmOpen}
-            onClose={() => setConfirmOpen(false)}
-          />
-          <ActivateCycleDialog
-            cycle={selected}
-            open={activateOpen}
-            onClose={() => setActivateOpen(false)}
-          />
-          <CompleteCycleDialog
-            cycle={selected}
-            open={completeOpen}
-            onClose={() => setCompleteOpen(false)}
-          />
-          <DeleteDraftCycleDialog
-            cycle={selected}
-            open={deleteOpen}
-            onClose={() => setDeleteOpen(false)}
-          />
-        </>
-      ) : null}
     </DashboardLayout>
   );
 }

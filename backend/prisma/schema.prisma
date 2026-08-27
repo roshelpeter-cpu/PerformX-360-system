@@ -58,6 +58,7 @@ model Employee {
   supervisorAssignmentHistoryAsNew      SupervisorAssignmentHistory[]  @relation("SupervisorHistoryNew")
   supervisorAssignmentHistoryAsPrev     SupervisorAssignmentHistory[]  @relation("SupervisorHistoryPrevious")
   unauthorizedAccessAttempts            UnauthorizedAccessAttempt[]
+  cycleProgress                         EmployeeCycleProgress[]
 }
 
 model AppraisalCycle {
@@ -86,6 +87,7 @@ model AppraisalCycle {
   meetings                    Meeting[]
   pdps                        PersonalDevelopmentPlan[]
   supervisorAssignmentHistory SupervisorAssignmentHistory[]
+  employeeProgress            EmployeeCycleProgress[]
 
   @@index([status])
   @@index([startDate])
@@ -118,6 +120,7 @@ model AppraisalBatch {
   assignments               EmployeeBatchAssignment[]
   meetings                  Meeting[]
   pdps                      PersonalDevelopmentPlan[]
+  employeeProgress          EmployeeCycleProgress[]
 
   @@unique([cycleId, batchNumber])
   @@index([cycleId])
@@ -434,6 +437,14 @@ model AppraisalOutcome {
   achievements               String?
   areasForImprovement        String?
   outcomes                   String?
+  /// When HR issued the final result to the employee.
+  resultsIssuedAt            DateTime?
+  awardReceived              Boolean         @default(false)
+  awardTitle                 String?
+  awardDescription           String?
+  pipRequired                Boolean         @default(false)
+  pipStatus                  PipStatus       @default(NONE)
+  pipSummary                 String?
   createdAt                  DateTime        @default(now())
   updatedAt                  DateTime        @updatedAt
   batch                      AppraisalBatch? @relation(fields: [batchId], references: [id])
@@ -442,6 +453,38 @@ model AppraisalOutcome {
 
   @@unique([cycleId, employeeId])
   @@index([employeeId])
+}
+
+/// Per-employee appraisal stage for a cycle.
+/// Batch.currentStage is the default timeline; this row is used when an
+/// employee is ahead of or behind their batch (new joiners, PDP lag, PIP, etc.).
+model EmployeeCycleProgress {
+  id                          String             @id @default(cuid())
+  employeeId                  String
+  cycleId                     String
+  batchId                     String?
+  currentStage                BatchWorkflowStage
+  planningMeetingCompletedAt  DateTime?
+  pdpCreatedAt                DateTime?
+  pdpSentAt                   DateTime?
+  pdpApprovedAt               DateTime?
+  followUpMeetingsCompleted   Int                @default(0)
+  appraisalPeriodStartedAt    DateTime?
+  selfReviewStartedAt         DateTime?
+  selfReviewCompletedAt       DateTime?
+  peerReviewCompletedAt       DateTime?
+  supervisorReviewCompletedAt DateTime?
+  hrEvaluationCompletedAt     DateTime?
+  resultsIssuedAt             DateTime?
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+  batch                       AppraisalBatch?    @relation(fields: [batchId], references: [id])
+  cycle                       AppraisalCycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee                    Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, employeeId])
+  @@index([batchId])
+  @@index([currentStage])
 }
 
 model CompanyObjective {
@@ -713,4 +756,12 @@ enum PdpReviewKind {
   EMPLOYEE_CHANGE_REQUEST
   SUPERVISOR_NOTE
   HR_INTERVENTION
+}
+
+enum PipStatus {
+  NONE
+  REQUIRED
+  ASSIGNED
+  ACTIVE
+  COMPLETED
 }

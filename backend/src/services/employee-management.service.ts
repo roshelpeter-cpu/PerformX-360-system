@@ -6,7 +6,7 @@
 import { Role } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../utils/errors.js";
-import { changeEmployeeSupervisor } from "./appraisal-assignment.service.js";
+import { changeEmployeeSupervisor, changeEmployeeBatch } from "./appraisal-assignment.service.js";
 import {
   SUPERVISED_ROLES,
   employeePublicSelect,
@@ -520,6 +520,63 @@ export async function reassignEmployeeSupervisor(
   const { batchByEmployee, supervisorByEmployee } = await loadAssignments(
     cycle.id
   );
+  const updated = await prisma.employee.findUniqueOrThrow({
+    where: { id: employee.id },
+    select: employeePublicSelect,
+  });
+
+  return {
+    cycle: { id: cycle.id, name: cycle.name, status: cycle.status },
+    assignment,
+    employee: mapEmployeeRow(
+      updated,
+      batchByEmployee.get(updated.id) ?? null,
+      supervisorByEmployee.get(updated.id) ?? null
+    ),
+  };
+}
+
+/** Updates the current-cycle batch assignment and writes history. */
+export async function reassignEmployeeBatch(
+  employeeRecordId: string,
+  input: {
+    newBatchId: string;
+    reason?: string | null;
+    effectiveDate?: string | null;
+    acknowledgeStarted?: boolean;
+  },
+  changedById: string
+) {
+  const cycle = await getWorkforceCycle();
+  if (!cycle) {
+    throw new AppError(
+      "An appraisal cycle is required before batch assignments can be changed.",
+      400
+    );
+  }
+
+  const employee = await prisma.employee.findFirst({
+    where: {
+      OR: [{ id: employeeRecordId }, { employeeId: employeeRecordId }],
+    },
+    select: { id: true, role: true },
+  });
+  if (!employee) throw new AppError("Employee not found", 404);
+
+  const assignment = await changeEmployeeBatch(
+    cycle.id,
+    employee.id,
+    {
+      newBatchId: input.newBatchId,
+      reason: input.reason,
+      effectiveDate: input.effectiveDate,
+      acknowledgeStarted: Boolean(input.acknowledgeStarted),
+      confirmStarted: Boolean(input.acknowledgeStarted),
+    },
+    changedById
+  );
+
+  const { batchByEmployee, supervisorByEmployee } = await loadAssignments(cycle.id);
   const updated = await prisma.employee.findUniqueOrThrow({
     where: { id: employee.id },
     select: employeePublicSelect,

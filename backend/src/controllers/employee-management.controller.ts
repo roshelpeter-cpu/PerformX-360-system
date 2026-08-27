@@ -11,6 +11,7 @@ import {
   listLeadershipUsers,
   listWorkforceEmployees,
   listWorkforceSupervisors,
+  reassignEmployeeBatch,
   reassignEmployeeSupervisor,
 } from "../services/employee-management.service.js";
 
@@ -162,6 +163,30 @@ export async function changeSupervisor(
         newSupervisorId: string;
         reason?: string | null;
         effectiveDate?: string | null;
+      },
+      changedById
+    );
+    res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function changeBatch(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const { employeeId } = req.params as { employeeId: string };
+    const changedById = requireUserId(req);
+    const result = await reassignEmployeeBatch(
+      employeeId,
+      req.body as {
+        newBatchId: string;
+        reason?: string | null;
+        effectiveDate?: string | null;
+        acknowledgeStarted?: boolean;
       },
       changedById
     );

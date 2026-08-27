@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EmptyState, fieldClass } from "@/features/hr/components/ActionMenu";
-import { CycleProgress } from "@/features/hr/components/CycleProgress";
 import ChangeBatchDialog from "@/features/hr/components/ChangeBatchDialog";
 import ChangeSupervisorDialog from "@/features/hr/components/ChangeSupervisorDialog";
 import { AssignmentHistoryDrawer } from "@/features/hr/components/AssignmentHistoryDrawer";
@@ -84,9 +83,6 @@ export default function BatchDetailPage() {
             <p className="mt-1 text-sm text-stone-500">
               Batch {batch.batchNumber} · {formatDate(batch.startDate)} — {formatDate(batch.endDate)}
             </p>
-            <div className="mt-4">
-              <CycleProgress batch={batch} compact />
-            </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <SummaryStat label="Total employees" value={batch.employeeCount} />
               <SummaryStat label="Assigned supervisors" value={batch.supervisorCount ?? 0} />

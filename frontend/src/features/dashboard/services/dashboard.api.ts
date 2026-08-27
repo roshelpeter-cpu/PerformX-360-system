@@ -38,6 +38,60 @@ export interface DashboardBatch {
   endDate?: string;
 }
 
+export interface AppraisalStageView {
+  id: string;
+  title: string;
+  description: string;
+  status: "completed" | "current" | "pending";
+  date: string | null;
+}
+
+export interface EmployeeAppraisalProgress {
+  cycle: DashboardCycle | null;
+  batch: DashboardBatch | null;
+  supervisor: {
+    id: string;
+    employeeId: string;
+    name: string;
+    jobTitle: string | null;
+    companyEmail: string;
+  } | null;
+  currentStage: string;
+  currentStageLabel: string;
+  stages: AppraisalStageView[];
+  planningMeetingCompleted: boolean;
+  followUpMeetingsCompleted: number;
+  pdp: {
+    id: string;
+    status: string;
+    created: boolean;
+    sentToEmployee: boolean;
+    approvalPending: boolean;
+    approved: boolean;
+    approvedAt: string | null;
+  } | null;
+  reviews: {
+    selfReview: "not_started" | "active" | "completed";
+    peerReview: "not_started" | "active" | "completed";
+    supervisorReview: "not_started" | "active" | "completed";
+    hrEvaluation: "not_started" | "active" | "completed";
+  };
+  outcome: {
+    overallResult: string;
+    ratingBand: string | null;
+    overallScore: number | null;
+    resultsIssued: boolean;
+    resultsIssuedAt: string | null;
+    awardReceived: boolean;
+    awardTitle: string | null;
+    awardDescription: string | null;
+    pipRequired: boolean;
+    pipStatus: string;
+    pipSummary: string | null;
+    supervisorComments: string | null;
+  } | null;
+}
+
 export interface DashboardTeamMember {
   id: string;
   employeeId: string;
@@ -87,6 +141,7 @@ export interface DashboardPayload {
   pendingPasswordResets?: number;
   notifications: DashboardNotification[];
   unreadCount: number;
+  progress?: EmployeeAppraisalProgress;
 }
 
 export async function getMyDashboardRequest() {

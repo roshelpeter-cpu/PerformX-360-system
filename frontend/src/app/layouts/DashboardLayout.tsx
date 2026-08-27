@@ -49,6 +49,16 @@ function navSectionsForRole(role: string | undefined) {
     ];
   }
 
+  if (role === "SUPERVISOR") {
+    return [
+      { heading: "MAIN", items: [dashboard] },
+      {
+        heading: "TEAM MANAGEMENT",
+        items: [{ label: "My Team", to: "/supervisor/my-team", icon: Users, end: true }],
+      },
+    ];
+  }
+
   return [{ heading: "", items: [dashboard] }];
 }
 

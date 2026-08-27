@@ -111,6 +111,8 @@ export function useReassignSupervisor() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: keys.all });
       queryClient.invalidateQueries({ queryKey: ["appraisal-cycles"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["supervisor"] });
       toast.success("Supervisor assignment updated.");
     },
     onError: (error) => {

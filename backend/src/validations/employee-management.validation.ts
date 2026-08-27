@@ -41,5 +41,16 @@ export const reassignSupervisorSchema = z.object({
   effectiveDate: optionalDateString,
 });
 
+export const reassignBatchSchema = z.object({
+  newBatchId: z.string().trim().min(1, "New batch is required"),
+  reason: z.string().trim().max(2000).optional().nullable(),
+  effectiveDate: optionalDateString,
+  acknowledgeStarted: z
+    .union([z.boolean(), z.literal("true"), z.literal("false")])
+    .optional()
+    .transform((value) => value === true || value === "true"),
+});
+
 export type EmployeeListQuery = z.infer<typeof employeeListQuerySchema>;
 export type ReassignSupervisorInput = z.infer<typeof reassignSupervisorSchema>;
+export type ReassignBatchInput = z.infer<typeof reassignBatchSchema>;

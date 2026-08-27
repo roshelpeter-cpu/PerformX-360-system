@@ -8,7 +8,8 @@
  * - 15 departments
  * - ~900 EMPLOYEE records plus supervisors, HR, and leadership
  * - Persistent batch and supervisor assignments for each appraisal cycle
- * - 2025 COMPLETED, 2026 ACTIVE, and 2027 UPCOMING cycles
+ * - Completed cycles for 2022–2025, 2026 ACTIVE, and 2027 UPCOMING
+ * - Staggered 2026 batch progress and five named employee scenarios
  *
  * Re-runs skip existing employee IDs and rebuild cycle assignments only.
  */
@@ -16,6 +17,13 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type Role } from "../generated/prisma/client.js";
 import bcrypt from "bcrypt";
+import {
+  applyCompletedBatchProgress,
+  applyCurrentCycleBatchProgress,
+  seedCycleHistoriesAndOutcomes,
+  seedDemoEmployeeScenarios,
+  seedNeedsAssignmentJoiners,
+} from "./seed-appraisal-data.js";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
@@ -472,6 +480,18 @@ async function main() {
 }
 
 async function resetCycleData() {
+  // Child appraisal records first — meetings are not cascaded from cycles.
+  await prisma.employeeCycleProgress.deleteMany();
+  await prisma.appraisalOutcome.deleteMany();
+  await prisma.pdpReviewComment.deleteMany();
+  await prisma.pdpGoal.deleteMany();
+  await prisma.personalDevelopmentPlan.deleteMany();
+  await prisma.meetingActionItem.deleteMany();
+  await prisma.meetingNotes.deleteMany();
+  await prisma.meetingParticipant.deleteMany();
+  await prisma.meetingRescheduleRequest.deleteMany();
+  await prisma.planningMeetingReview.deleteMany();
+  await prisma.meeting.deleteMany();
   await prisma.batchAssignmentHistory.deleteMany();
   await prisma.supervisorAssignmentHistory.deleteMany();
   await prisma.employeeBatchAssignment.deleteMany();
@@ -579,6 +599,39 @@ async function seedAppraisalCycles(
     });
   }
 
+  const cycle2022 = await createCycle({
+    name: "2022 Annual Appraisal",
+    description: "Completed historical cycle covering the 2022 performance year.",
+    status: "COMPLETED",
+    start: utcDate(2022, 3, 1),
+    batchStarts: [utcDate(2022, 3, 1), utcDate(2022, 5, 1), utcDate(2022, 8, 1)],
+    confirmedAt: utcDate(2022, 2, 8),
+    activatedAt: utcDate(2022, 3, 1),
+    completedAt: utcDate(2023, 2, 28),
+  });
+
+  const cycle2023 = await createCycle({
+    name: "2023 Annual Appraisal",
+    description: "Completed historical cycle covering the 2023 performance year.",
+    status: "COMPLETED",
+    start: utcDate(2023, 3, 1),
+    batchStarts: [utcDate(2023, 3, 1), utcDate(2023, 5, 1), utcDate(2023, 8, 1)],
+    confirmedAt: utcDate(2023, 2, 10),
+    activatedAt: utcDate(2023, 3, 1),
+    completedAt: utcDate(2024, 2, 29),
+  });
+
+  const cycle2024 = await createCycle({
+    name: "2024 Annual Appraisal",
+    description: "Completed historical cycle covering the 2024 performance year.",
+    status: "COMPLETED",
+    start: utcDate(2024, 3, 1),
+    batchStarts: [utcDate(2024, 3, 1), utcDate(2024, 5, 1), utcDate(2024, 8, 1)],
+    confirmedAt: utcDate(2024, 2, 12),
+    activatedAt: utcDate(2024, 3, 1),
+    completedAt: utcDate(2025, 3, 5),
+  });
+
   const historical = await createCycle({
     name: "2025 Annual Appraisal",
     description: "Completed historical appraisal cycle retained for reporting.",
@@ -593,7 +646,7 @@ async function seedAppraisalCycles(
   const active = await createCycle({
     name: "2026 Annual Appraisal",
     description:
-      "Current active appraisal cycle. Employees are assigned to batches and supervisors for the year.",
+      "Current active appraisal cycle. Most employees are already assigned; a small set of new joiners still need a batch or supervisor.",
     status: "ACTIVE",
     start: utcDate(2026, 3, 1),
     batchStarts: [utcDate(2026, 3, 1), utcDate(2026, 5, 1), utcDate(2026, 10, 1)],
@@ -652,51 +705,47 @@ async function seedAppraisalCycles(
     }
   }
 
-  for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
-  await assignCycle(historical);
+  const completedCycles = [cycle2022, cycle2023, cycle2024, historical];
+  for (const cycle of completedCycles) {
+    for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
+    await assignCycle(cycle);
+    await applyCompletedBatchProgress(
+      prisma,
+      cycle.batches,
+      Number(cycle.name.slice(0, 4))
+    );
+  }
 
   for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
   await assignCycle(active);
+  await applyCurrentCycleBatchProgress(prisma, active.batches);
 
   for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
   await assignCycle(upcoming);
 
-  const sampleEmployee = employeesOnly[20];
-  const sampleEmployee2 = employeesOnly[35];
-  if (sampleEmployee && sampleEmployee2 && active.batches[0] && active.batches[1]) {
-    await prisma.batchAssignmentHistory.create({
-      data: {
-        cycleId: active.id,
-        employeeId: sampleEmployee.id,
-        previousBatchId: active.batches[0].id,
-        newBatchId: active.batches[1].id,
-        reason: "Long leave covering Batch 1 window",
-        changedById: hrUserId,
-        effectiveDate: utcDate(2026, 6, 1),
-      },
-    });
+  await seedCycleHistoriesAndOutcomes(prisma, {
+    hrUserId,
+    cycles: [
+      { id: cycle2022.id, year: 2022, batches: cycle2022.batches },
+      { id: cycle2023.id, year: 2023, batches: cycle2023.batches },
+      { id: cycle2024.id, year: 2024, batches: cycle2024.batches },
+      { id: historical.id, year: 2025, batches: historical.batches },
+      { id: active.id, year: 2026, batches: active.batches },
+    ],
+    employees: employeesOnly,
+    supervisors,
+  });
 
-    const deptSupervisors = supervisors.filter(
-      (item) => item.departmentId === sampleEmployee2.departmentId
-    );
-    if (deptSupervisors.length >= 2) {
-      await prisma.supervisorAssignmentHistory.create({
-        data: {
-          cycleId: active.id,
-          employeeId: sampleEmployee2.id,
-          previousSupervisorId: deptSupervisors[0]!.id,
-          newSupervisorId: deptSupervisors[1]!.id,
-          reason: "Organizational change within the department",
-          changedById: hrUserId,
-          effectiveDate: utcDate(2026, 7, 15),
-        },
-      });
-    }
-  }
+  await seedDemoEmployeeScenarios(prisma, {
+    hrUserId,
+    cycleId: active.id,
+    batches: active.batches,
+  });
+  await seedNeedsAssignmentJoiners(prisma, active.id);
 
   console.log("Appraisal cycle workforce assignments seeded.");
   console.log(
-    `Cycles: ${historical.name} (COMPLETED), ${active.name} (ACTIVE), ${upcoming.name} (UPCOMING)`
+    `Cycles: 2022–2025 COMPLETED, ${active.name} (ACTIVE), ${upcoming.name} (UPCOMING)`
   );
 }
 

@@ -179,7 +179,12 @@ export function useEligibleSupervisors(
 
 function useInvalidateCycles() {
   const queryClient = useQueryClient();
-  return () => queryClient.invalidateQueries({ queryKey: keys.all });
+  return () => {
+    queryClient.invalidateQueries({ queryKey: keys.all });
+    queryClient.invalidateQueries({ queryKey: ["employee-management"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    queryClient.invalidateQueries({ queryKey: ["supervisor"] });
+  };
 }
 
 export function useCreateCycle() {

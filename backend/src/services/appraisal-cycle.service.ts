@@ -72,6 +72,8 @@ export const batchSelect = {
   hrEvaluationStartedAt: true,
   recognitionStartedAt: true,
   closedAt: true,
+  pdpStartDate: true,
+  pdpEndDate: true,
   _count: { select: { assignments: true } },
 } as const;
 
@@ -200,6 +202,9 @@ async function loadBatchTimelines(
   batches: Array<{
     id: string;
     startDate: Date;
+    currentStage?: BatchWorkflowStage | null;
+    pdpStartDate?: Date | null;
+    pdpEndDate?: Date | null;
     selfReviewStartedAt: Date | null;
     peerReviewStartedAt: Date | null;
     supervisorReviewStartedAt: Date | null;
@@ -265,10 +270,14 @@ async function loadBatchTimelines(
       hrEvaluationStartedAt: batch.hrEvaluationStartedAt,
       recognitionStartedAt: batch.recognitionStartedAt,
       closedAt: batch.closedAt,
+      storedStage: batch.currentStage ?? null,
     };
     const timeline = buildBatchTimeline(snapshot, {
       [BatchWorkflowStage.CONFIGURATION]: batch.startDate,
-      [BatchWorkflowStage.PDP_APPROVED]: approved[0]?.approvedAt ?? null,
+      [BatchWorkflowStage.PLANNING_MEETING]: batch.startDate,
+      [BatchWorkflowStage.PDP_CREATION]: batch.pdpStartDate ?? null,
+      [BatchWorkflowStage.PDP_APPROVED]: approved[0]?.approvedAt ?? batch.pdpEndDate ?? null,
+      [BatchWorkflowStage.PROGRESS_PERIOD]: batch.pdpEndDate ?? null,
       [BatchWorkflowStage.SELF_REVIEW]: batch.selfReviewStartedAt,
       [BatchWorkflowStage.PEER_REVIEW]: batch.peerReviewStartedAt,
       [BatchWorkflowStage.SUPERVISOR_REVIEW]: batch.supervisorReviewStartedAt,

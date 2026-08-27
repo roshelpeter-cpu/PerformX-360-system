@@ -10,8 +10,11 @@ import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { ActionMenu, fieldClass } from "@/features/hr/components/ActionMenu";
 import { StatusBadge } from "@/features/hr/components/StatusBadge";
+import ChangeBatchDialog from "@/features/hr/components/ChangeBatchDialog";
 import ChangeSupervisorModal from "@/features/employees/components/ChangeSupervisorModal";
 import { OverlayModal, initials } from "@/features/employees/components/OverlayModal";
+import { useAppraisalCycle } from "@/features/hr/hooks/useAppraisalCycles";
+import type { CycleEmployeeRow } from "@/features/hr/types";
 import {
   useBatchEmployees,
   useEmployeeOverview,
@@ -45,7 +48,6 @@ const emptyFilters: EmployeeFilters = {
   search: "",
   departmentId: "",
   batchId: "",
-  status: "ALL",
 };
 
 function downloadCsv(filename: string, headers: string[], rows: string[][]) {
@@ -73,13 +75,29 @@ function EmployeeAvatar({ name }: { name: string }) {
   );
 }
 
+function toCycleRow(employee: WorkforceEmployee): CycleEmployeeRow {
+  return {
+    id: employee.id,
+    employeeId: employee.employeeId,
+    name: employee.name,
+    role: employee.role,
+    companyEmail: employee.companyEmail,
+    department: employee.department,
+    batch: employee.batch,
+    supervisor: employee.supervisor,
+    assignmentStatus: employee.status,
+  };
+}
+
 function EmployeeTable({
   employees,
   showSupervisor,
+  onChangeBatch,
   onChangeSupervisor,
 }: {
   employees: WorkforceEmployee[];
   showSupervisor?: boolean;
+  onChangeBatch?: (employee: WorkforceEmployee) => void;
   onChangeSupervisor?: (employee: WorkforceEmployee) => void;
 }) {
   return (
@@ -123,14 +141,21 @@ function EmployeeTable({
               <StatusBadge status={employee.status} />
             </td>
             <td className="px-3 py-3 text-right">
-              {onChangeSupervisor ? (
+              {onChangeBatch || onChangeSupervisor ? (
                 <ActionMenu
                   items={[
+                    {
+                      // HR asked for Change Batch as the first action.
+                      label: employee.batch ? "Change Batch" : "Assign Batch",
+                      hidden: !onChangeBatch,
+                      onClick: () => onChangeBatch?.(employee),
+                    },
                     {
                       label: employee.supervisor
                         ? "Change Supervisor"
                         : "Assign Supervisor",
-                      onClick: () => onChangeSupervisor(employee),
+                      hidden: !onChangeSupervisor,
+                      onClick: () => onChangeSupervisor?.(employee),
                     },
                   ]}
                 />
@@ -151,8 +176,10 @@ export default function EmployeesPage() {
   const [openSupervisorId, setOpenSupervisorId] = useState<string | undefined>();
   const [selectedEmployee, setSelectedEmployee] =
     useState<WorkforceEmployee | null>(null);
+  const [batchEmployee, setBatchEmployee] = useState<WorkforceEmployee | null>(null);
 
   const overview = useEmployeeOverview(applied);
+  const cycleQuery = useAppraisalCycle(overview.data?.cycle?.id);
   const supervisors = useWorkforceSupervisors(
     { ...applied, pageSize: 500 },
     tab === "supervisors"
@@ -328,7 +355,12 @@ export default function EmployeesPage() {
                   ? `Total Leadership: ${leadership.data?.total ?? 0}`
                   : `Total Employees: ${visibleEmployeeCount}`}
           </p>
-          <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div
+            className={cn(
+              "grid flex-1 gap-3 md:grid-cols-2",
+              tab === "employees" ? "xl:grid-cols-3" : "xl:grid-cols-2"
+            )}
+          >
             {tab === "employees" ? (
               <select
                 className={fieldClass}
@@ -364,29 +396,14 @@ export default function EmployeesPage() {
                 </option>
               ))}
             </select>
-            {tab === "employees" ? (
-              <select
-                className={fieldClass}
-                value={draft.status ?? "ALL"}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, status: event.target.value }))
-                }
-                aria-label="All Status"
-              >
-                <option value="ALL">All Status</option>
-                <option value="ASSIGNED">Assigned</option>
-                <option value="PARTIAL">Partial</option>
-                <option value="UNASSIGNED">Unassigned</option>
-              </select>
-            ) : null}
             <input
               className={fieldClass}
               value={draft.search ?? ""}
               onChange={(event) =>
                 setDraft((current) => ({ ...current, search: event.target.value }))
               }
-              placeholder="Search by name or employee..."
-              aria-label="Search by name or employee ID"
+              placeholder="Search by employee name or employee ID"
+              aria-label="Search by employee name or employee ID"
             />
           </div>
           <div className="flex shrink-0 gap-2">
@@ -422,13 +439,14 @@ export default function EmployeesPage() {
                           {batch.startLabel} · {batch.percentOfEmployees}% of employees
                         </p>
                       </div>
-                      <p className="text-4xl font-semibold tabular-nums text-stone-900 dark:text-white">
+                      <p className="text-xl font-semibold tabular-nums text-stone-900 dark:text-white">
                         {batch.employeeCount}
                       </p>
                     </div>
                     <div className="mt-4 overflow-x-auto">
                       <EmployeeTable
                         employees={batch.preview}
+                        onChangeBatch={setBatchEmployee}
                         onChangeSupervisor={setSelectedEmployee}
                       />
                     </div>
@@ -534,6 +552,7 @@ export default function EmployeesPage() {
           <EmployeeTable
             employees={batchDetail.data?.employees ?? []}
             showSupervisor
+            onChangeBatch={setBatchEmployee}
             onChangeSupervisor={setSelectedEmployee}
           />
         )}
@@ -552,11 +571,20 @@ export default function EmployeesPage() {
           <EmployeeTable
             employees={supervisorDetail.data?.employees ?? []}
             showSupervisor
+            onChangeBatch={setBatchEmployee}
             onChangeSupervisor={setSelectedEmployee}
           />
         )}
       </OverlayModal>
 
+      <ChangeBatchDialog
+        key={batchEmployee?.id ?? "batch"}
+        open={Boolean(batchEmployee)}
+        onClose={() => setBatchEmployee(null)}
+        cycleId={overview.data?.cycle?.id ?? ""}
+        employee={batchEmployee ? toCycleRow(batchEmployee) : null}
+        batches={cycleQuery.data?.batches ?? []}
+      />
       <ChangeSupervisorModal
         key={selectedEmployee?.id ?? "supervisor"}
         open={Boolean(selectedEmployee)}
@@ -581,10 +609,10 @@ function StatTile({
   iconClass: string;
 }) {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
+    <div className="rounded-2xl border border-stone-200 bg-white p-3.5 dark:border-stone-800 dark:bg-stone-900">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-3xl font-semibold tabular-nums text-stone-900 dark:text-white">
+          <p className="text-xl font-semibold tabular-nums text-stone-900 dark:text-white">
             {value}
           </p>
           <p className="mt-2 text-sm font-medium text-stone-800 dark:text-stone-200">

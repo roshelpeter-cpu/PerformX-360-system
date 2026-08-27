@@ -82,6 +82,9 @@ export interface BatchActivitySnapshot {
   hrEvaluationStartedAt: Date | null;
   recognitionStartedAt: Date | null;
   closedAt: Date | null;
+  /// Persisted batch.currentStage. Used when activity counts would otherwise
+  /// keep every batch at Planning Meeting (e.g. staggered demo progress).
+  storedStage?: BatchWorkflowStage | null | undefined;
 }
 
 export function deriveBatchStage(
@@ -93,51 +96,48 @@ export function deriveBatchStage(
   ) {
     return BatchWorkflowStage.CLOSURE;
   }
+
+  let derived: BatchWorkflowStage;
   if (snapshot.recognitionStartedAt) {
-    return BatchWorkflowStage.RECOGNITION_PIP;
-  }
-  if (snapshot.hrEvaluationStartedAt) {
-    return BatchWorkflowStage.HR_EVALUATION;
-  }
-  if (snapshot.supervisorReviewStartedAt) {
-    return BatchWorkflowStage.SUPERVISOR_REVIEW;
-  }
-  if (snapshot.peerReviewStartedAt) {
-    return BatchWorkflowStage.PEER_REVIEW;
-  }
-  if (snapshot.selfReviewStartedAt) {
-    return BatchWorkflowStage.SELF_REVIEW;
+    derived = BatchWorkflowStage.RECOGNITION_PIP;
+  } else if (snapshot.hrEvaluationStartedAt) {
+    derived = BatchWorkflowStage.HR_EVALUATION;
+  } else if (snapshot.supervisorReviewStartedAt) {
+    derived = BatchWorkflowStage.SUPERVISOR_REVIEW;
+  } else if (snapshot.peerReviewStartedAt) {
+    derived = BatchWorkflowStage.PEER_REVIEW;
+  } else if (snapshot.selfReviewStartedAt) {
+    derived = BatchWorkflowStage.SELF_REVIEW;
+  } else {
+    const allPdpsApproved =
+      snapshot.employeeCount > 0 &&
+      snapshot.approvedPdpCount >= snapshot.employeeCount;
+    const allPdpsCreated =
+      snapshot.employeeCount > 0 && snapshot.pdpCount >= snapshot.employeeCount;
+    const planningComplete =
+      snapshot.employeeCount > 0 &&
+      snapshot.completedPlanningMeetings >= snapshot.employeeCount;
+
+    if (allPdpsApproved) derived = BatchWorkflowStage.PROGRESS_PERIOD;
+    else if (allPdpsCreated) derived = BatchWorkflowStage.PDP_APPROVED;
+    else if (snapshot.pdpCount > 0 || snapshot.approvedPdpCount > 0 || planningComplete) {
+      derived = BatchWorkflowStage.PDP_CREATION;
+    } else if (snapshot.cycleStatus === AppraisalCycleStatus.DRAFT) {
+      derived = BatchWorkflowStage.CONFIGURATION;
+    } else {
+      derived = BatchWorkflowStage.PLANNING_MEETING;
+    }
   }
 
-  const allPdpsApproved =
-    snapshot.employeeCount > 0 &&
-    snapshot.approvedPdpCount >= snapshot.employeeCount;
-  if (allPdpsApproved) {
-    return BatchWorkflowStage.PROGRESS_PERIOD;
-  }
+  return laterStage(derived, snapshot.storedStage);
+}
 
-  const allPdpsCreated =
-    snapshot.employeeCount > 0 && snapshot.pdpCount >= snapshot.employeeCount;
-  if (allPdpsCreated) {
-    return BatchWorkflowStage.PDP_APPROVED;
-  }
-
-  if (snapshot.pdpCount > 0 || snapshot.approvedPdpCount > 0) {
-    return BatchWorkflowStage.PDP_CREATION;
-  }
-
-  const planningComplete =
-    snapshot.employeeCount > 0 &&
-    snapshot.completedPlanningMeetings >= snapshot.employeeCount;
-  if (planningComplete) {
-    return BatchWorkflowStage.PDP_CREATION;
-  }
-
-  if (snapshot.cycleStatus === AppraisalCycleStatus.DRAFT) {
-    return BatchWorkflowStage.CONFIGURATION;
-  }
-
-  return BatchWorkflowStage.PLANNING_MEETING;
+function laterStage(
+  derived: BatchWorkflowStage,
+  stored?: BatchWorkflowStage | null
+): BatchWorkflowStage {
+  if (!stored) return derived;
+  return stageIndex(stored) > stageIndex(derived) ? stored : derived;
 }
 
 export function buildBatchTimeline(
@@ -146,15 +146,25 @@ export function buildBatchTimeline(
 ) {
   const current = deriveBatchStage(snapshot);
   const currentIndex = stageIndex(current);
+  const cycleComplete =
+    snapshot.cycleStatus === AppraisalCycleStatus.COMPLETED ||
+    Boolean(snapshot.closedAt);
 
   return {
-    currentStage: current,
-    currentStageLabel:
-      BATCH_STAGE_DEFINITIONS[currentIndex]?.title ?? current,
+    currentStage: cycleComplete ? BatchWorkflowStage.CLOSURE : current,
+    currentStageLabel: cycleComplete
+      ? (BATCH_STAGE_DEFINITIONS[stageIndex(BatchWorkflowStage.CLOSURE)]?.title ??
+        "Closure")
+      : BATCH_STAGE_DEFINITIONS[currentIndex]?.title ?? current,
     stages: BATCH_STAGE_DEFINITIONS.map((stage, index) => {
       let status: "completed" | "current" | "pending" = "pending";
-      if (index < currentIndex) status = "completed";
-      else if (index === currentIndex) status = "current";
+      if (cycleComplete) {
+        status = "completed";
+      } else if (index < currentIndex) {
+        status = "completed";
+      } else if (index === currentIndex) {
+        status = "current";
+      }
 
       return {
         id: stage.id,

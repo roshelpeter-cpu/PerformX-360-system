@@ -540,12 +540,6 @@ function SupervisorsTab({ cycleId }: { cycleId: string }) {
           >
             Clear filters
           </Button>
-          <Link
-            to={`/hr/appraisal-cycles/${cycleId}/supervisors`}
-            className="inline-flex h-9 items-center rounded-lg bg-stone-900 px-3 text-sm font-medium text-white hover:bg-stone-800 dark:bg-stone-100 dark:text-stone-950 dark:hover:bg-white"
-          >
-            View All
-          </Link>
         </div>
       </div>
 
@@ -564,20 +558,15 @@ function SupervisorsTab({ cycleId }: { cycleId: string }) {
             </h2>
             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
               {group.supervisors.slice(0, 6).map((supervisor) => (
-                <div
+                <Link
                   key={supervisor.id}
+                  to={`/hr/appraisal-cycles/${cycleId}/supervisors/${supervisor.id}`}
                   className="rounded-xl border border-stone-200 bg-white px-4 py-3 dark:border-stone-800 dark:bg-stone-900"
                 >
                   <p className="text-sm font-medium">{supervisor.name}</p>
                   <p className="text-xs text-stone-500">{supervisor.employeeId}</p>
                   <p className="mt-2 text-sm">{supervisor.employeeCount} employees</p>
-                  <Link
-                    to={`/hr/appraisal-cycles/${cycleId}/supervisors/${supervisor.id}`}
-                    className="mt-2 inline-flex text-xs font-medium text-stone-900 hover:underline dark:text-stone-100"
-                  >
-                    View All
-                  </Link>
-                </div>
+                </Link>
               ))}
             </div>
           </div>

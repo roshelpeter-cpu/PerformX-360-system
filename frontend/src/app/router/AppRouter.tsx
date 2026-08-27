@@ -6,6 +6,8 @@ import LoginPage from "@/features/auth/pages/LoginPage";
 import ForgotPasswordPage from "@/features/auth/pages/ForgotPasswordPage";
 import EmployeeDashboardPage from "@/features/dashboard/pages/EmployeeDashboardPage";
 import SupervisorDashboardPage from "@/features/dashboard/pages/SupervisorDashboardPage";
+import MyTeamPage from "@/features/supervisor/pages/MyTeamPage";
+import TeamMemberDetailPage from "@/features/supervisor/pages/TeamMemberDetailPage";
 import HrDashboardPage from "@/features/dashboard/pages/HrDashboardPage";
 import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashboardPage";
 import EmployeesPage from "@/features/employees/pages/EmployeesPage";
@@ -54,6 +56,22 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
                 <SupervisorDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/my-team"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <MyTeamPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/my-team/:employeeId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <TeamMemberDetailPage />
               </ProtectedRoute>
             }
           />
