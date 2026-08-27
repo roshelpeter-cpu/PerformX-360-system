@@ -1,0 +1,716 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Department {
+  id         String                @id @default(cuid())
+  name       String                @unique
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  objectives DepartmentObjective[]
+  employees  Employee[]
+}
+
+model Employee {
+  id                                    String                         @id @default(cuid())
+  employeeId                            String                         @unique
+  passwordHash                          String
+  role                                  Role
+  name                                  String
+  companyEmail                          String                         @unique
+  departmentId                          String?
+  createdAt                             DateTime                       @default(now())
+  updatedAt                             DateTime                       @updatedAt
+  jobTitle                              String?
+  createdAppraisalCycles                AppraisalCycle[]               @relation("AppraisalCycleCreatedBy")
+  appraisalOutcomes                     AppraisalOutcome[]
+  authLock                              AuthLock?
+  batchAssignmentHistoryChangedBy       BatchAssignmentHistory[]       @relation("BatchHistoryChangedBy")
+  batchAssignmentHistoryAsEmployee      BatchAssignmentHistory[]       @relation("BatchHistoryEmployee")
+  department                            Department?                    @relation(fields: [departmentId], references: [id])
+  batchAssignments                      EmployeeBatchAssignment[]      @relation("BatchAssignmentEmployee")
+  supervisorAssignmentsAsEmployee       EmployeeSupervisorAssignment[] @relation("SupervisorAssignmentEmployee")
+  supervisorAssignmentsAsSupervisor     EmployeeSupervisorAssignment[] @relation("SupervisorAssignmentSupervisor")
+  meetingsCreated                       Meeting[]                      @relation("MeetingCreatedBy")
+  meetingsAsSubject                     Meeting[]                      @relation("MeetingSubject")
+  meetingsAsSupervisor                  Meeting[]                      @relation("MeetingSupervisor")
+  meetingNotesAuthored                  MeetingNotes[]                 @relation("MeetingNotesAuthor")
+  meetingParticipations                 MeetingParticipant[]           @relation("MeetingParticipant")
+  rescheduleRequests                    MeetingRescheduleRequest[]     @relation("RescheduleRequester")
+  rescheduleReviews                     MeetingRescheduleRequest[]     @relation("RescheduleReviewer")
+  receivedNotifications                 Notification[]                 @relation("NotificationRecipient")
+  subjectOfNotifications                Notification[]                 @relation("NotificationSubject")
+  passwordResetRequests                 PasswordResetRequest[]
+  PdpReviewComment                      PdpReviewComment[]
+  pdpsApproved                          PersonalDevelopmentPlan[]      @relation("PdpApprovedBy")
+  pdpsCreated                           PersonalDevelopmentPlan[]      @relation("PdpCreatedBy")
+  pdpsAsEmployee                        PersonalDevelopmentPlan[]      @relation("PdpEmployee")
+  pdpsAsSupervisor                      PersonalDevelopmentPlan[]      @relation("PdpSupervisor")
+  planningReviewsUpdated                PlanningMeetingReview[]        @relation("PlanningReviewUpdatedBy")
+  securityEvents                        SecurityEvent[]
+  supervisorAssignmentHistoryChangedBy  SupervisorAssignmentHistory[]  @relation("SupervisorHistoryChangedBy")
+  supervisorAssignmentHistoryAsEmployee SupervisorAssignmentHistory[]  @relation("SupervisorHistoryEmployee")
+  supervisorAssignmentHistoryAsNew      SupervisorAssignmentHistory[]  @relation("SupervisorHistoryNew")
+  supervisorAssignmentHistoryAsPrev     SupervisorAssignmentHistory[]  @relation("SupervisorHistoryPrevious")
+  unauthorizedAccessAttempts            UnauthorizedAccessAttempt[]
+}
+
+model AppraisalCycle {
+  id                          String                         @id @default(cuid())
+  name                        String
+  description                 String?
+  startDate                   DateTime
+  endDate                     DateTime
+  status                      AppraisalCycleStatus           @default(DRAFT)
+  /// Set to "ACTIVE" when status is ACTIVE; null otherwise. Enforces one active cycle.
+  activeLock                  String?                        @unique
+  confirmedAt                 DateTime?
+  activatedAt                 DateTime?
+  completedAt                 DateTime?
+  createdById                 String
+  createdAt                   DateTime                       @default(now())
+  updatedAt                   DateTime                       @updatedAt
+  batches                     AppraisalBatch[]
+  createdBy                   Employee                       @relation("AppraisalCycleCreatedBy", fields: [createdById], references: [id])
+  appraisalOutcomes           AppraisalOutcome[]
+  batchAssignmentHistory      BatchAssignmentHistory[]
+  companyObjectives           CompanyObjective[]
+  departmentObjectives        DepartmentObjective[]
+  batchAssignments            EmployeeBatchAssignment[]
+  supervisorAssignments       EmployeeSupervisorAssignment[]
+  meetings                    Meeting[]
+  pdps                        PersonalDevelopmentPlan[]
+  supervisorAssignmentHistory SupervisorAssignmentHistory[]
+
+  @@index([status])
+  @@index([startDate])
+}
+
+model AppraisalBatch {
+  id                        String                    @id @default(cuid())
+  cycleId                   String
+  batchNumber               Int
+  name                      String
+  description               String?
+  startDate                 DateTime
+  endDate                   DateTime
+  status                    AppraisalBatchStatus      @default(UPCOMING)
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  closedAt                  DateTime?
+  currentStage              BatchWorkflowStage        @default(CONFIGURATION)
+  hrEvaluationStartedAt     DateTime?
+  peerReviewStartedAt       DateTime?
+  recognitionStartedAt      DateTime?
+  selfReviewStartedAt       DateTime?
+  supervisorReviewStartedAt DateTime?
+  pdpEndDate                DateTime?
+  pdpStartDate              DateTime?
+  cycle                     AppraisalCycle            @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  appraisalOutcomes         AppraisalOutcome[]
+  historyAsNew              BatchAssignmentHistory[]  @relation("BatchHistoryNew")
+  historyAsPrevious         BatchAssignmentHistory[]  @relation("BatchHistoryPrevious")
+  assignments               EmployeeBatchAssignment[]
+  meetings                  Meeting[]
+  pdps                      PersonalDevelopmentPlan[]
+
+  @@unique([cycleId, batchNumber])
+  @@index([cycleId])
+}
+
+model EmployeeBatchAssignment {
+  id         String         @id @default(cuid())
+  cycleId    String
+  batchId    String
+  employeeId String
+  assignedAt DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  batch      AppraisalBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  cycle      AppraisalCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee   Employee       @relation("BatchAssignmentEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, employeeId])
+  @@index([batchId])
+  @@index([employeeId])
+}
+
+model EmployeeSupervisorAssignment {
+  id           String         @id @default(cuid())
+  cycleId      String
+  employeeId   String
+  supervisorId String
+  assignedAt   DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  cycle        AppraisalCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee     Employee       @relation("SupervisorAssignmentEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisor   Employee       @relation("SupervisorAssignmentSupervisor", fields: [supervisorId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, employeeId])
+  @@index([supervisorId])
+  @@index([employeeId])
+}
+
+model BatchAssignmentHistory {
+  id              String          @id @default(cuid())
+  cycleId         String
+  employeeId      String
+  previousBatchId String?
+  newBatchId      String
+  reason          String
+  evidence        String?
+  evidenceName    String?
+  effectiveDate   DateTime?
+  changedById     String
+  changedAt       DateTime        @default(now())
+  changedBy       Employee        @relation("BatchHistoryChangedBy", fields: [changedById], references: [id])
+  cycle           AppraisalCycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee        Employee        @relation("BatchHistoryEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  newBatch        AppraisalBatch  @relation("BatchHistoryNew", fields: [newBatchId], references: [id], onDelete: Cascade)
+  previousBatch   AppraisalBatch? @relation("BatchHistoryPrevious", fields: [previousBatchId], references: [id])
+
+  @@index([cycleId, changedAt])
+  @@index([employeeId])
+}
+
+model SupervisorAssignmentHistory {
+  id                   String         @id @default(cuid())
+  cycleId              String
+  employeeId           String
+  previousSupervisorId String?
+  newSupervisorId      String
+  reason               String
+  evidence             String?
+  evidenceName         String?
+  effectiveDate        DateTime?
+  changedById          String
+  changedAt            DateTime       @default(now())
+  changedBy            Employee       @relation("SupervisorHistoryChangedBy", fields: [changedById], references: [id])
+  cycle                AppraisalCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee             Employee       @relation("SupervisorHistoryEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  newSupervisor        Employee       @relation("SupervisorHistoryNew", fields: [newSupervisorId], references: [id], onDelete: Cascade)
+  previousSupervisor   Employee?      @relation("SupervisorHistoryPrevious", fields: [previousSupervisorId], references: [id])
+
+  @@index([cycleId, changedAt])
+  @@index([employeeId])
+}
+
+model PasswordResetRequest {
+  id         String              @id @default(cuid())
+  employeeId String
+  status     PasswordResetStatus @default(PENDING)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+  handledAt  DateTime?
+  employee   Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, status])
+}
+
+model Notification {
+  id                String             @id @default(cuid())
+  type              NotificationType
+  title             String
+  message           String
+  status            NotificationStatus @default(UNREAD)
+  recipientId       String?
+  subjectEmployeeId String?
+  metadata          Json?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  recipient         Employee?          @relation("NotificationRecipient", fields: [recipientId], references: [id])
+  subjectEmployee   Employee?          @relation("NotificationSubject", fields: [subjectEmployeeId], references: [id])
+
+  @@index([recipientId, status])
+}
+
+model SecurityEvent {
+  id          String            @id @default(cuid())
+  employeeId  String
+  type        SecurityEventType
+  description String
+  metadata    Json?
+  createdAt   DateTime          @default(now())
+  employee    Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, createdAt])
+}
+
+model AuthLock {
+  id          String   @id @default(cuid())
+  employeeId  String   @unique
+  lockedUntil DateTime
+  reason      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model UnauthorizedAccessAttempt {
+  id             String   @id @default(cuid())
+  employeeId     String
+  attemptedRoute String
+  createdAt      DateTime @default(now())
+  employee       Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, createdAt])
+}
+
+model Meeting {
+  id                                                                             String                     @id @default(cuid())
+  type                                                                           MeetingType
+  title                                                                          String
+  description                                                                    String?
+  employeeId                                                                     String
+  cycleId                                                                        String?
+  scheduledAt                                                                    DateTime
+  endAt                                                                          DateTime
+  status                                                                         MeetingStatus              @default(SCHEDULED)
+  createdById                                                                    String
+  createdAt                                                                      DateTime                   @default(now())
+  updatedAt                                                                      DateTime                   @updatedAt
+  location                                                                       String?
+  supervisorId                                                                   String?
+  batchId                                                                        String?
+  followUpSlot                                                                   Int?
+  isAdditionalFollowUp                                                           Boolean                    @default(false)
+  previousEndAt                                                                  DateTime?
+  previousScheduledAt                                                            DateTime?
+  reminderForScheduledAt                                                         DateTime?
+  reminderSentAt                                                                 DateTime?
+  batch                                                                          AppraisalBatch?            @relation(fields: [batchId], references: [id])
+  createdBy                                                                      Employee                   @relation("MeetingCreatedBy", fields: [createdById], references: [id])
+  cycle                                                                          AppraisalCycle?            @relation(fields: [cycleId], references: [id])
+  employee                                                                       Employee                   @relation("MeetingSubject", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisor                                                                     Employee?                  @relation("MeetingSupervisor", fields: [supervisorId], references: [id])
+  actionItems                                                                    MeetingActionItem[]
+  notes                                                                          MeetingNotes?
+  participants                                                                   MeetingParticipant[]
+  rescheduleRequests                                                             MeetingRescheduleRequest[]
+  PersonalDevelopmentPlan_PersonalDevelopmentPlan_disagreementMeetingIdToMeeting PersonalDevelopmentPlan[]  @relation("PersonalDevelopmentPlan_disagreementMeetingIdToMeeting")
+  pdpsFromMeeting                                                                PersonalDevelopmentPlan[]  @relation("PdpPlanningMeeting")
+  planningReview                                                                 PlanningMeetingReview?
+
+  @@index([type, scheduledAt])
+  @@index([employeeId, cycleId, followUpSlot])
+  @@index([status])
+  @@index([employeeId])
+  @@index([supervisorId])
+  @@index([batchId])
+}
+
+model MeetingNotes {
+  id                     String   @id @default(cuid())
+  meetingId              String   @unique
+  discussionSummary      String
+  keyPoints              String   @default("")
+  decisionsMade          String
+  actionItems            String   @default("")
+  nextSteps              String   @default("")
+  additionalComments     String?
+  createdById            String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  actionItemsList        Json?
+  attachments            Json?
+  developmentAreasAgreed String?
+  disagreements          String?
+  goalsDiscussed         String?
+  createdBy              Employee @relation("MeetingNotesAuthor", fields: [createdById], references: [id])
+  meeting                Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+}
+
+model MeetingParticipant {
+  id              String                     @id @default(cuid())
+  meetingId       String
+  employeeId      String
+  participantRole MeetingParticipantRole     @default(OTHER)
+  respondedAt     DateTime?
+  response        MeetingParticipantResponse @default(PENDING)
+  responseMessage String?
+  employee        Employee                   @relation("MeetingParticipant", fields: [employeeId], references: [id], onDelete: Cascade)
+  meeting         Meeting                    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, employeeId])
+  @@index([employeeId])
+}
+
+model MeetingRescheduleRequest {
+  id             String                  @id @default(cuid())
+  meetingId      String
+  requesterId    String
+  reason         String
+  requestedStart DateTime?
+  requestedEnd   DateTime?
+  evidence       String?
+  evidenceName   String?
+  status         RescheduleRequestStatus @default(PENDING)
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  meeting        Meeting                 @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  requester      Employee                @relation("RescheduleRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewedBy     Employee?               @relation("RescheduleReviewer", fields: [reviewedById], references: [id])
+
+  @@index([meetingId, status])
+  @@index([requesterId])
+}
+
+model PersonalDevelopmentPlan {
+  id                                                             String             @id @default(cuid())
+  employeeId                                                     String
+  supervisorId                                                   String?
+  cycleId                                                        String
+  batchId                                                        String
+  status                                                         PdpStatus          @default(DRAFT)
+  summary                                                        String?
+  createdById                                                    String
+  approvedById                                                   String?
+  approvedAt                                                     DateTime?
+  createdAt                                                      DateTime           @default(now())
+  updatedAt                                                      DateTime           @updatedAt
+  planningMeetingId                                              String?
+  disagreementMeetingId                                          String?
+  employeeAgreedAt                                               DateTime?
+  hrReviewedAt                                                   DateTime?
+  goals                                                          PdpGoal[]
+  PdpReviewComment                                               PdpReviewComment[]
+  approvedBy                                                     Employee?          @relation("PdpApprovedBy", fields: [approvedById], references: [id])
+  batch                                                          AppraisalBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  createdBy                                                      Employee           @relation("PdpCreatedBy", fields: [createdById], references: [id])
+  cycle                                                          AppraisalCycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  Meeting_PersonalDevelopmentPlan_disagreementMeetingIdToMeeting Meeting?           @relation("PersonalDevelopmentPlan_disagreementMeetingIdToMeeting", fields: [disagreementMeetingId], references: [id])
+  employee                                                       Employee           @relation("PdpEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  planningMeeting                                                Meeting?           @relation("PdpPlanningMeeting", fields: [planningMeetingId], references: [id])
+  supervisor                                                     Employee?          @relation("PdpSupervisor", fields: [supervisorId], references: [id])
+
+  @@unique([cycleId, employeeId])
+  @@index([batchId])
+  @@index([status])
+  @@index([planningMeetingId])
+}
+
+model PdpGoal {
+  id               String                  @id @default(cuid())
+  pdpId            String
+  title            String
+  objective        String
+  expectedOutcome  String?
+  dueDate          DateTime?
+  progress         Int                     @default(0)
+  status           PdpGoalStatus           @default(NOT_STARTED)
+  progressComments String?
+  developmentArea  String?
+  sortOrder        Int                     @default(0)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+  category         String?
+  measurementKpi   String?
+  notes            String?
+  priority         PdpGoalPriority         @default(MEDIUM)
+  successCriteria  String?
+  weightage        Float                   @default(0)
+  pdp              PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+
+  @@index([pdpId])
+}
+
+model AppraisalOutcome {
+  id                         String          @id @default(cuid())
+  employeeId                 String
+  cycleId                    String
+  batchId                    String?
+  overallResult              String
+  ratingBand                 String?
+  overallScore               Float?
+  supervisorComments         String?
+  developmentRecommendations String?
+  achievements               String?
+  areasForImprovement        String?
+  outcomes                   String?
+  createdAt                  DateTime        @default(now())
+  updatedAt                  DateTime        @updatedAt
+  batch                      AppraisalBatch? @relation(fields: [batchId], references: [id])
+  cycle                      AppraisalCycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee                   Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, employeeId])
+  @@index([employeeId])
+}
+
+model CompanyObjective {
+  id          String          @id @default(cuid())
+  cycleId     String?
+  title       String
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  cycle       AppraisalCycle? @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId])
+}
+
+model DepartmentObjective {
+  id           String          @id @default(cuid())
+  departmentId String
+  cycleId      String?
+  title        String
+  description  String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  cycle        AppraisalCycle? @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  department   Department      @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@index([departmentId, cycleId])
+}
+
+model PlanningMeetingReview {
+  id                            String   @id @default(cuid())
+  meetingId                     String   @unique
+  technicalStrengths            String   @default("")
+  communicationStrengths        String   @default("")
+  leadershipStrengths           String   @default("")
+  problemSolvingStrengths       String   @default("")
+  otherStrengths                String   @default("")
+  technicalGaps                 String   @default("")
+  communicationGaps             String   @default("")
+  timeManagementIssues          String   @default("")
+  leadershipGaps                String   @default("")
+  skillGaps                     String   @default("")
+  otherImprovementAreas         String   @default("")
+  departmentObjectivesNotes     String   @default("")
+  companyObjectivesNotes        String   @default("")
+  alignmentOutcome              String   @default("")
+  trainingNeeds                 String   @default("")
+  certificationNeeds            String   @default("")
+  technicalSkillNeeds           String   @default("")
+  softSkillNeeds                String   @default("")
+  leadershipDevelopmentNeeds    String   @default("")
+  roleSpecificNeeds             String   @default("")
+  otherDevelopmentNeeds         String   @default("")
+  continueFromPreviousPdp       String   @default("")
+  improveFromPreviousPdp        String   @default("")
+  replaceFromPreviousPdp        String   @default("")
+  newlyIntroduced               String   @default("")
+  updatedById                   String
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+  additionalComments            String   @default("")
+  agreedOutcomes                String   @default("")
+  decisionsMade                 String   @default("")
+  developmentNeedsSummary       String   @default("")
+  employeeStrengths             String   @default("")
+  employeeWeaknesses            String   @default("")
+  objectivesDiscussed           String   @default("")
+  performanceObservations       String   @default("")
+  previousAppraisalFindings     String   @default("")
+  previousAppraisalObservations String   @default("")
+  previousAppraisalReviewed     String   @default("")
+  previousPdpCompleted          String   @default("")
+  previousPdpIncomplete         String   @default("")
+  previousPdpObjectives         String   @default("")
+  previousPdpObservations       String   @default("")
+  previousPdpProgress           String   @default("")
+  meeting                       Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  updatedBy                     Employee @relation("PlanningReviewUpdatedBy", fields: [updatedById], references: [id])
+}
+
+model MeetingActionItem {
+  id                String           @id @default(cuid())
+  meetingId         String
+  action            String
+  owner             ActionItemOwner
+  dueDate           DateTime?
+  status            ActionItemStatus @default(OPEN)
+  notes             String?
+  sortOrder         Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  responsiblePerson String?
+  meeting           Meeting          @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+}
+
+model PdpReviewComment {
+  id                      String                  @id
+  pdpId                   String
+  authorId                String
+  kind                    PdpReviewKind
+  message                 String
+  createdAt               DateTime                @default(now())
+  Employee                Employee                @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  PersonalDevelopmentPlan PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+
+  @@index([pdpId])
+}
+
+enum Role {
+  EMPLOYEE
+  SUPERVISOR
+  HR
+  LEADERSHIP
+}
+
+enum PasswordResetStatus {
+  PENDING
+  HANDLED
+  CANCELLED
+}
+
+enum NotificationType {
+  PASSWORD_RESET_REQUEST
+  SECURITY_WARNING
+  PASSWORD_RESET_COMPLETE
+  MEETING_INVITATION
+  MEETING_RESPONSE
+  MEETING_RESCHEDULE_REQUEST
+  MEETING_ALL_ACCEPTED
+  MEETING_RESCHEDULED
+  MEETING_CONFIRMED
+  FOLLOW_UP_SCHEDULED
+  FOLLOW_UP_REMINDER
+  FOLLOW_UP_RESCHEDULE_REQUEST
+  PDP_APPROVED
+  SELF_REVIEW_STARTED
+  BATCH_STAGE_CHANGED
+  PDP_SUBMITTED
+  PDP_HR_FEEDBACK
+  PDP_EMPLOYEE_RESPONSE
+  PDP_CHANGES_REQUESTED
+  PDP_INTERVENTION_REQUIRED
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
+enum SecurityEventType {
+  UNAUTHORIZED_ACCESS
+  AUTH_LOCK
+  PASSWORD_RESET
+  LOGIN_FAILED
+}
+
+enum AppraisalCycleStatus {
+  DRAFT
+  UPCOMING
+  ACTIVE
+  COMPLETED
+}
+
+enum AppraisalBatchStatus {
+  UPCOMING
+  ONGOING
+  FINISHED
+}
+
+enum MeetingType {
+  PERFORMANCE_PLANNING
+  PDP_DISAGREEMENT
+  FOLLOW_UP
+  OTHER
+}
+
+enum MeetingStatus {
+  REQUESTED
+  SCHEDULED
+  RESCHEDULED
+  COMPLETED
+  CANCELLED
+  PENDING
+  CONFIRMED
+  RESCHEDULE_REQUESTED
+}
+
+enum MeetingParticipantRole {
+  HR
+  SUPERVISOR
+  EMPLOYEE
+  OTHER
+}
+
+enum MeetingParticipantResponse {
+  PENDING
+  ACCEPTED
+  REJECTED
+  RESCHEDULE_REQUESTED
+}
+
+enum RescheduleRequestStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum BatchWorkflowStage {
+  CONFIGURATION
+  PLANNING_MEETING
+  PDP_CREATION
+  PDP_APPROVED
+  PROGRESS_PERIOD
+  SELF_REVIEW
+  PEER_REVIEW
+  SUPERVISOR_REVIEW
+  HR_EVALUATION
+  RECOGNITION_PIP
+  CLOSURE
+}
+
+enum PdpStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PENDING_HR_REVIEW
+  PENDING_EMPLOYEE_REVIEW
+  CHANGES_REQUESTED
+  UNDER_SUPERVISOR_REVISION
+  PENDING_EMPLOYEE_REREVIEW
+  PENDING_HR_INTERVENTION
+  CHANGES_REQUESTED_BY_HR
+  CHANGES_REQUESTED_BY_EMPLOYEE
+  COMPLETED
+}
+
+enum PdpGoalStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  CARRIED_FORWARD
+  REPLACED
+}
+
+enum ActionItemStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum ActionItemOwner {
+  EMPLOYEE
+  SUPERVISOR
+  HR
+}
+
+enum PdpGoalPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum PdpReviewKind {
+  HR_SUGGESTION
+  EMPLOYEE_AGREEMENT
+  EMPLOYEE_CHANGE_REQUEST
+  SUPERVISOR_NOTE
+  HR_INTERVENTION
+}

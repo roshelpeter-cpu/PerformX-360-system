@@ -1,0 +1,180 @@
+// Appraisal Cycle Routes
+// HR-only HTTP routes for cycle creation, lifecycle, assignments,
+// and draft-only deletion. Confirmed cycles cannot be deleted.
+import { Router } from "express";
+import { authenticateUser } from "../middlewares/authenticate.js";
+import { requireRole } from "../middlewares/requireRole.js";
+import { optionalEvidenceUpload } from "../middlewares/upload.js";
+import {
+  validateBody,
+  validateParams,
+  validateQuery,
+} from "../middlewares/validate.js";
+import { ROLES } from "../constants/roles.js";
+import {
+  activateCycle,
+  changeBatch,
+  changeSupervisor,
+  completeCycle,
+  confirmCycle,
+  createCycle,
+  deleteCycle,
+  downloadEvidence,
+  getActivationPreview,
+  getBatch,
+  getCurrentCycle,
+  getCycle,
+  getCycleEmployees,
+  getDepartments,
+  getEligibleSupervisors,
+  getHistory,
+  getHistoryCycles,
+  getSupervisor,
+  getSupervisors,
+  getWorkforce,
+  listCycles,
+  startBatch,
+  updateBatch,
+  updateCycle,
+} from "../controllers/appraisal-cycle.controller.js";
+import {
+  assignmentHistoryQuerySchema,
+  changeBatchSchema,
+  changeSupervisorSchema,
+  createCycleSchema,
+  cycleBatchParamsSchema,
+  cycleEmployeeParamsSchema,
+  cycleIdParamsSchema,
+  cycleListQuerySchema,
+  cycleSupervisorParamsSchema,
+  employeeAssignmentQuerySchema,
+  evidenceFilenameParamsSchema,
+  supervisorQuerySchema,
+  updateBatchSchema,
+  updateCycleSchema,
+} from "../validations/appraisal-cycle.validation.js";
+import { startBatchStageSchema } from "../validations/meeting.validation.js";
+
+// ============================================================
+// APPRAISAL CYCLE ROUTES
+// All endpoints require an authenticated HR user. Mutations never run
+// without that role check — frontend route hiding is not sufficient.
+// ============================================================
+const appraisalCycleRouter = Router();
+
+appraisalCycleRouter.use(authenticateUser, requireRole(ROLES.HR));
+
+appraisalCycleRouter.get("/departments", getDepartments);
+appraisalCycleRouter.get("/workforce", getWorkforce);
+appraisalCycleRouter.get(
+  "/evidence/:filename",
+  validateParams(evidenceFilenameParamsSchema),
+  downloadEvidence
+);
+
+appraisalCycleRouter.get(
+  "/",
+  validateQuery(cycleListQuerySchema),
+  listCycles
+);
+appraisalCycleRouter.post("/", validateBody(createCycleSchema), createCycle);
+appraisalCycleRouter.get("/current", getCurrentCycle);
+appraisalCycleRouter.get("/history", getHistoryCycles);
+
+appraisalCycleRouter.get("/:id", validateParams(cycleIdParamsSchema), getCycle);
+appraisalCycleRouter.patch(
+  "/:id",
+  validateParams(cycleIdParamsSchema),
+  validateBody(updateCycleSchema),
+  updateCycle
+);
+appraisalCycleRouter.post(
+  "/:id/confirm",
+  validateParams(cycleIdParamsSchema),
+  confirmCycle
+);
+appraisalCycleRouter.get(
+  "/:id/activation-readiness",
+  validateParams(cycleIdParamsSchema),
+  getActivationPreview
+);
+appraisalCycleRouter.post(
+  "/:id/activate",
+  validateParams(cycleIdParamsSchema),
+  activateCycle
+);
+appraisalCycleRouter.post(
+  "/:id/complete",
+  validateParams(cycleIdParamsSchema),
+  completeCycle
+);
+appraisalCycleRouter.delete(
+  "/:id",
+  validateParams(cycleIdParamsSchema),
+  deleteCycle
+);
+
+appraisalCycleRouter.get(
+  "/:id/batches/:batchId",
+  validateParams(cycleBatchParamsSchema),
+  getBatch
+);
+appraisalCycleRouter.patch(
+  "/:id/batches/:batchId",
+  validateParams(cycleBatchParamsSchema),
+  validateBody(updateBatchSchema),
+  updateBatch
+);
+appraisalCycleRouter.post(
+  "/:id/batches/:batchId/start-stage",
+  validateParams(cycleBatchParamsSchema),
+  validateBody(startBatchStageSchema),
+  startBatch
+);
+
+appraisalCycleRouter.get(
+  "/:id/employees",
+  validateParams(cycleIdParamsSchema),
+  validateQuery(employeeAssignmentQuerySchema),
+  getCycleEmployees
+);
+appraisalCycleRouter.post(
+  "/:id/employees/:employeeId/batch",
+  validateParams(cycleEmployeeParamsSchema),
+  optionalEvidenceUpload,
+  validateBody(changeBatchSchema),
+  changeBatch
+);
+appraisalCycleRouter.post(
+  "/:id/employees/:employeeId/supervisor",
+  validateParams(cycleEmployeeParamsSchema),
+  optionalEvidenceUpload,
+  validateBody(changeSupervisorSchema),
+  changeSupervisor
+);
+appraisalCycleRouter.get(
+  "/:id/employees/:employeeId/eligible-supervisors",
+  validateParams(cycleEmployeeParamsSchema),
+  getEligibleSupervisors
+);
+
+appraisalCycleRouter.get(
+  "/:id/supervisors",
+  validateParams(cycleIdParamsSchema),
+  validateQuery(supervisorQuerySchema),
+  getSupervisors
+);
+appraisalCycleRouter.get(
+  "/:id/supervisors/:supervisorId",
+  validateParams(cycleSupervisorParamsSchema),
+  getSupervisor
+);
+
+appraisalCycleRouter.get(
+  "/:id/assignment-history",
+  validateParams(cycleIdParamsSchema),
+  validateQuery(assignmentHistoryQuerySchema),
+  getHistory
+);
+
+export default appraisalCycleRouter;

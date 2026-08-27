@@ -1,0 +1,15 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+/generated/prisma
+/uploads/evidence/*
+!/uploads/evidence/.gitkeep
+
+# Local debug / one-off inspection scripts are not part of the application.
+check-db.ts
+create-test-user.ts
+/scripts/check-login-db.ts
+/scripts/correct-cycle-data.ts
+/scripts/ping-db.ts
+/scripts/verify-and-setup.ts
