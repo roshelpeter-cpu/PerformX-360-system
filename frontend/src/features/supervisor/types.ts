@@ -23,8 +23,11 @@ export interface TeamMember {
   pdp: {
     id: string;
     status: string;
-    progress: number | null;
+    progress?: number | null;
   } | null;
+  currentStage?: string;
+  currentStageLabel?: string;
+  planningMeetingCompleted?: boolean;
   status: string;
 }
 
@@ -40,7 +43,8 @@ export interface MyTeamResponse {
   stats: {
     teamSize: number;
     activePdps: number;
-    avgPdpProgress: number;
+    avgPdpProgress?: number;
+    planningMeetingsCompleted?: number;
     completedReviews: number;
   };
   batches: TeamBatch[];

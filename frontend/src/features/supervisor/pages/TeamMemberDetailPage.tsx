@@ -3,6 +3,7 @@ import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { formatRoleLabel } from "@/constants/roles";
 import { AppraisalProgressDetails } from "@/features/dashboard/components/AppraisalProgressDetails";
 import { AppraisalTimelineCard } from "@/features/dashboard/components/AppraisalTimelineCard";
+import { AppraisalHistoryPanel } from "@/features/history/components/AppraisalHistoryPanel";
 import { useTeamMember } from "@/features/supervisor/hooks/useMyTeam";
 import type { UserRole } from "@/features/auth/types";
 
@@ -80,6 +81,8 @@ export default function TeamMemberDetailPage() {
             />
             <AppraisalProgressDetails progress={data.progress} />
           </div>
+
+          <AppraisalHistoryPanel employeeId={data.employee.id} />
         </div>
       ) : null}
     </DashboardLayout>

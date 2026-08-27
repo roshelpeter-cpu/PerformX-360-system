@@ -17,6 +17,13 @@ export const reportUnauthorizedSchema = z.object({
   attemptedRoute: z.string().trim().min(1, "Attempted route is required"),
 });
 
+export const notificationListQuerySchema = z.object({
+  category: z
+    .enum(["all", "unread", "meetings", "pdp", "reviews", "system", "employee"])
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 export type ReportUnauthorizedInput = z.infer<typeof reportUnauthorizedSchema>;

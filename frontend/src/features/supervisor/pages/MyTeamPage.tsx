@@ -1,25 +1,25 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { Link } from "react-router-dom";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { formatRoleLabel } from "@/constants/roles";
 import { StatusBadge } from "@/features/hr/components/StatusBadge";
 import { Pagination } from "@/features/hr/components/Pagination";
 import { fieldClass } from "@/features/hr/components/ActionMenu";
-import { useMyTeam } from "@/features/supervisor/hooks/useMyTeam";
+import { OverlayModal, initials as avatarInitials } from "@/features/employees/components/OverlayModal";
+import { AppraisalProgressDetails } from "@/features/dashboard/components/AppraisalProgressDetails";
+import { AppraisalTimelineCard } from "@/features/dashboard/components/AppraisalTimelineCard";
+import { AppraisalHistoryPanel } from "@/features/history/components/AppraisalHistoryPanel";
+import { useMyTeam, useTeamMember } from "@/features/supervisor/hooks/useMyTeam";
 import type { TeamMember } from "@/features/supervisor/types";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/features/auth/types";
 
+// Keep the list to identity + current stage. Full details open in the popup.
+
 const PAGE_SIZE = 10;
 
 function initials(name: string) {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
+  return avatarInitials(name);
 }
 
 function batchLabel(member: TeamMember) {
@@ -31,35 +31,13 @@ function batchLabel(member: TeamMember) {
   return `${member.batch.name} (${month})`;
 }
 
-function PdpCell({ member }: { member: TeamMember }) {
-  if (!member.pdp) {
-    return <span className="text-stone-400">—</span>;
-  }
-
-  const progress = member.pdp.progress ?? 0;
-  const showPercent = progress > 0;
-  const label = showPercent ? `${progress}%` : member.pdp.status.replaceAll("_", " ");
-
-  return (
-    <div className="min-w-[8rem]">
-      <p className="text-xs font-medium uppercase tracking-wide text-stone-600 dark:text-stone-300">
-        {label}
-      </p>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800">
-        <div
-          className="h-full rounded-full bg-amber-500 dark:bg-amber-400"
-          style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 export default function MyTeamPage() {
   const [search, setSearch] = useState("");
   const [batchId, setBatchId] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const detailQuery = useTeamMember(selectedId ?? undefined);
 
   const filters = useMemo(
     () => ({
@@ -98,13 +76,13 @@ export default function MyTeamPage() {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard label="Total team size" value={stats?.teamSize ?? 0} />
           <KpiCard
-            label="Active PDPs"
-            value={stats?.activePdps ?? 0}
+            label="Planning meetings done"
+            value={stats?.planningMeetingsCompleted ?? 0}
             highlight
           />
           <KpiCard
-            label="Avg. PDP progress"
-            value={`${stats?.avgPdpProgress ?? 0}%`}
+            label="Active PDPs"
+            value={stats?.activePdps ?? 0}
           />
           <KpiCard
             label="Completed reviews"
@@ -174,7 +152,7 @@ export default function MyTeamPage() {
                     <th className="px-4 py-3">Employee</th>
                     <th className="px-4 py-3">Role / Department</th>
                     <th className="px-4 py-3">Appraisal Batch</th>
-                    <th className="px-4 py-3">PDP</th>
+                    <th className="px-4 py-3">Current stage</th>
                     <th className="px-4 py-3">Status</th>
                   </tr>
                 </thead>
@@ -182,14 +160,12 @@ export default function MyTeamPage() {
                   {data?.employees.map((member) => (
                     <tr
                       key={member.id}
-                      className="border-b border-stone-100 dark:border-stone-800"
+                      className="cursor-pointer border-b border-stone-100 hover:bg-stone-50 dark:border-stone-800 dark:hover:bg-stone-950"
+                      onClick={() => setSelectedId(member.id)}
                     >
                       <td className="px-4 py-3">
-                        <Link
-                          to={`/supervisor/my-team/${member.id}`}
-                          className="flex items-center gap-3 hover:opacity-80"
-                        >
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-900 dark:bg-amber-400/20 dark:text-amber-200">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-semibold text-amber-900 dark:bg-stone-800 dark:text-amber-200">
                             {initials(member.name)}
                           </div>
                           <div>
@@ -200,7 +176,7 @@ export default function MyTeamPage() {
                               {member.employeeId}
                             </p>
                           </div>
-                        </Link>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <p className="text-stone-800 dark:text-stone-200">
@@ -213,8 +189,8 @@ export default function MyTeamPage() {
                       <td className="px-4 py-3 text-stone-700 dark:text-stone-300">
                         {batchLabel(member)}
                       </td>
-                      <td className="px-4 py-3">
-                        <PdpCell member={member} />
+                      <td className="px-4 py-3 text-stone-700 dark:text-stone-300">
+                        {member.currentStageLabel ?? member.status.replaceAll("_", " ")}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={member.status} />
@@ -240,7 +216,90 @@ export default function MyTeamPage() {
           ) : null}
         </div>
       </div>
+
+      <OverlayModal
+        open={Boolean(selectedId)}
+        title={detailQuery.data?.employee.name ?? "Employee details"}
+        subtitle="Full appraisal details for the selected team member."
+        onClose={() => setSelectedId(null)}
+        wide
+      >
+        {detailQuery.isLoading ? (
+          <p className="text-sm text-stone-500">Loading employee details…</p>
+        ) : detailQuery.data ? (
+          <div className="space-y-5">
+            <section className="rounded-2xl border border-stone-200 p-4 dark:border-stone-800">
+              <h3 className="text-sm font-semibold">Personal / employee information</h3>
+              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-3">
+                <Info label="Employee" value={detailQuery.data.employee.name} />
+                <Info label="Employee ID" value={detailQuery.data.employee.employeeId} />
+                <Info
+                  label="Email"
+                  value={detailQuery.data.employee.companyEmail}
+                />
+                <Info
+                  label="Department"
+                  value={detailQuery.data.employee.department?.name ?? "—"}
+                />
+                <Info
+                  label="Role"
+                  value={
+                    detailQuery.data.employee.jobTitle ??
+                    formatRoleLabel(detailQuery.data.employee.role as UserRole)
+                  }
+                />
+                <Info
+                  label="Current cycle"
+                  value={detailQuery.data.progress.cycle?.name ?? "—"}
+                />
+                <Info
+                  label="Assigned batch"
+                  value={
+                    detailQuery.data.progress.batch
+                      ? `${detailQuery.data.progress.batch.name} (Batch ${detailQuery.data.progress.batch.batchNumber})`
+                      : "—"
+                  }
+                />
+                <Info
+                  label="Assigned supervisor"
+                  value={
+                    detailQuery.data.progress.supervisor
+                      ? `${detailQuery.data.progress.supervisor.name} (${detailQuery.data.progress.supervisor.employeeId})`
+                      : "—"
+                  }
+                />
+                <Info
+                  label="Planning meeting"
+                  value={
+                    detailQuery.data.progress.planningMeetingCompleted
+                      ? "Completed"
+                      : "Not completed"
+                  }
+                />
+              </dl>
+            </section>
+            <AppraisalTimelineCard
+              currentStageLabel={detailQuery.data.progress.currentStageLabel}
+              stages={detailQuery.data.progress.stages}
+              compact
+            />
+            <AppraisalProgressDetails progress={detailQuery.data.progress} />
+            <AppraisalHistoryPanel employeeId={detailQuery.data.employee.id} />
+          </div>
+        ) : (
+          <p className="text-sm text-red-600">Unable to load this employee.</p>
+        )}
+      </OverlayModal>
     </DashboardLayout>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs uppercase tracking-wide text-stone-400">{label}</dt>
+      <dd className="mt-1 font-medium text-stone-900 dark:text-stone-100">{value}</dd>
+    </div>
   );
 }
 

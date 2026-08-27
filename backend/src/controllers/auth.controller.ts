@@ -17,10 +17,13 @@ import {
 } from "../services/auth.service.js";
 import {
   getHrNotifications,
+  getNotificationCounts,
   getNotificationsForUser,
   getUnreadNotificationCount,
   markAllNotificationsRead,
   markNotificationRead,
+  notificationCategory,
+  type NotificationCategory,
 } from "../services/notification.service.js";
 import { AppError } from "../utils/errors.js";
 
@@ -181,11 +184,24 @@ export async function myNotifications(
 ) {
   try {
     if (!req.user?.id) throw new AppError("Authentication required", 401);
-    const [notifications, unreadCount] = await Promise.all([
-      getNotificationsForUser(req.user.id),
+    const query = req.query as {
+      category?: NotificationCategory;
+      limit?: number;
+    };
+    const [notifications, unreadCount, counts] = await Promise.all([
+      getNotificationsForUser(req.user.id, query.limit ?? 80, query.category),
       getUnreadNotificationCount(req.user.id),
+      getNotificationCounts(req.user.id),
     ]);
-    res.status(200).json({ success: true, notifications, unreadCount });
+    res.status(200).json({
+      success: true,
+      notifications: notifications.map((item) => ({
+        ...item,
+        category: notificationCategory(item.type),
+      })),
+      unreadCount,
+      counts,
+    });
   } catch (error) {
     next(error);
   }

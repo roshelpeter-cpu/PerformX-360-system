@@ -14,11 +14,12 @@ import {
 } from "../controllers/auth.controller.js";
 import { authenticateUser } from "../middlewares/authenticate.js";
 import { requireRole } from "../middlewares/requireRole.js";
-import { validateBody, validateParams } from "../middlewares/validate.js";
+import { validateBody, validateParams, validateQuery } from "../middlewares/validate.js";
 import {
   forgotPasswordSchema,
   hrResetPasswordParamsSchema,
   loginSchema,
+  notificationListQuerySchema,
   reportUnauthorizedSchema,
 } from "../validations/auth.validation.js";
 import { ROLES } from "../constants/roles.js";
@@ -28,7 +29,12 @@ const authRouter = Router();
 authRouter.post("/login", validateBody(loginSchema), login);
 authRouter.post("/logout", logout);
 authRouter.get("/me", authenticateUser, me);
-authRouter.get("/notifications", authenticateUser, myNotifications);
+authRouter.get(
+  "/notifications",
+  authenticateUser,
+  validateQuery(notificationListQuerySchema),
+  myNotifications
+);
 authRouter.post(
   "/notifications/read-all",
   authenticateUser,

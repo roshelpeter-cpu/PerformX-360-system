@@ -94,6 +94,12 @@ export interface EmployeeAppraisalProgress {
     pipStatus: PipStatus;
     pipSummary: string | null;
     supervisorComments: string | null;
+    bonusAwarded: boolean;
+    bonusAmount: number | null;
+    bonusNotes: string | null;
+    promotionRecommended: boolean;
+    promotionTitle: string | null;
+    promotionNotes: string | null;
   } | null;
 }
 
@@ -360,9 +366,15 @@ export async function getEmployeeAppraisalProgress(
           awardDescription: outcome.awardDescription,
           pipRequired: outcome.pipRequired,
           pipStatus: outcome.pipStatus,
-          pipSummary: outcome.pipSummary,
-          supervisorComments: outcome.supervisorComments,
-        }
+    pipSummary: outcome.pipSummary,
+    supervisorComments: outcome.supervisorComments,
+    bonusAwarded: outcome.bonusAwarded,
+    bonusAmount: outcome.bonusAmount,
+    bonusNotes: outcome.bonusNotes,
+    promotionRecommended: outcome.promotionRecommended,
+    promotionTitle: outcome.promotionTitle,
+    promotionNotes: outcome.promotionNotes,
+  }
       : null,
   };
 }

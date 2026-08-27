@@ -8,6 +8,7 @@ import { prisma } from "../lib/prisma.js";
 import { AppError } from "../utils/errors.js";
 import type { SupervisorTeamQuery } from "../validations/supervisor-team.validation.js";
 import { getEmployeeAppraisalProgress } from "./appraisal-progress.service.js";
+import { BATCH_STAGE_DEFINITIONS } from "../utils/batch-timeline.js";
 
 const DEFAULT_PAGE_SIZE = 10;
 
@@ -21,13 +22,6 @@ function paginate<T>(items: T[], page = 1, pageSize = DEFAULT_PAGE_SIZE) {
     pageSize,
     totalPages: Math.max(1, Math.ceil(total / pageSize) || 1),
   };
-}
-
-function averageProgress(goals: Array<{ progress: number }>) {
-  if (goals.length === 0) return 0;
-  return Math.round(
-    goals.reduce((sum, goal) => sum + goal.progress, 0) / goals.length
-  );
 }
 
 export async function getSupervisorTeam(
@@ -67,7 +61,7 @@ export async function getSupervisorTeam(
       stats: {
         teamSize: 0,
         activePdps: 0,
-        avgPdpProgress: 0,
+        planningMeetingsCompleted: 0,
         completedReviews: 0,
       },
       batches: [],
@@ -105,6 +99,7 @@ export async function getSupervisorTeam(
                   name: true,
                   startDate: true,
                   endDate: true,
+                  currentStage: true,
                 },
               },
             },
@@ -114,8 +109,11 @@ export async function getSupervisorTeam(
             select: {
               id: true,
               status: true,
-              goals: { select: { progress: true } },
             },
+          },
+          cycleProgress: {
+            where: { cycleId: cycle.id },
+            select: { currentStage: true, planningMeetingCompletedAt: true },
           },
           appraisalOutcomes: {
             where: { cycleId: cycle.id },
@@ -130,7 +128,12 @@ export async function getSupervisorTeam(
   const members = assignments.map((row) => {
     const pdp = row.employee.pdpsAsEmployee[0] ?? null;
     const batch = row.employee.batchAssignments[0]?.batch ?? null;
-    const progress = pdp ? averageProgress(pdp.goals) : null;
+    const progressRow = row.employee.cycleProgress[0] ?? null;
+    const currentStage =
+      progressRow?.currentStage ?? batch?.currentStage ?? "CONFIGURATION";
+    const currentStageLabel =
+      BATCH_STAGE_DEFINITIONS.find((stage) => stage.id === currentStage)?.title ??
+      currentStage.replaceAll("_", " ");
 
     return {
       id: row.employee.id,
@@ -153,26 +156,23 @@ export async function getSupervisorTeam(
         ? {
             id: pdp.id,
             status: pdp.status,
-            progress,
           }
         : null,
-      status: "ACTIVE" as const,
+      currentStage,
+      currentStageLabel,
+      planningMeetingCompleted: Boolean(progressRow?.planningMeetingCompletedAt),
+      status: currentStage,
       reviewComplete: row.employee.appraisalOutcomes.length > 0,
     };
   });
 
   const teamSize = members.length;
-  const activePdps = members.filter((member) => member.pdp).length;
-  const progressValues = members
-    .map((member) => member.pdp?.progress)
-    .filter((value): value is number => typeof value === "number");
-  const avgPdpProgress =
-    progressValues.length === 0
-      ? 0
-      : Math.round(
-          progressValues.reduce((sum, value) => sum + value, 0) /
-            progressValues.length
-        );
+  const activePdps = members.filter(
+    (member) => member.pdp && member.pdp.status !== "COMPLETED"
+  ).length;
+  const planningMeetingsCompleted = members.filter(
+    (member) => member.planningMeetingCompleted
+  ).length;
   const completedReviews = members.filter((member) => member.reviewComplete).length;
 
   const departmentMap = new Map<string, string>();
@@ -228,7 +228,7 @@ export async function getSupervisorTeam(
     stats: {
       teamSize,
       activePdps,
-      avgPdpProgress,
+      planningMeetingsCompleted,
       completedReviews,
     },
     batches: Array.from(batchMap.values()).sort(
@@ -247,6 +247,9 @@ export async function getSupervisorTeam(
       department: member.department,
       batch: member.batch,
       pdp: member.pdp,
+      currentStage: member.currentStage,
+      currentStageLabel: member.currentStageLabel,
+      planningMeetingCompleted: member.planningMeetingCompleted,
       status: member.status,
     })),
     total: page.total,

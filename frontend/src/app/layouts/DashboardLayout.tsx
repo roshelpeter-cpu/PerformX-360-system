@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, Link } from "react-router-dom";
 import {
   Bell,
   CalendarRange,
@@ -32,6 +32,23 @@ function navSectionsForRole(role: string | undefined) {
     icon: LayoutDashboard,
     end: true,
   };
+  const notifications = {
+    label: "Notifications",
+    to: "/notifications",
+    icon: Bell,
+    end: true,
+  };
+  const planningMeetings = {
+    label: "Performance Planning Meetings",
+    to:
+      role === "HR"
+        ? "/hr/meetings/planning"
+        : role === "SUPERVISOR"
+          ? "/supervisor/meetings/planning"
+          : "/employee/meetings/planning",
+    icon: CalendarRange,
+    end: false,
+  };
 
   if (role === "HR") {
     return [
@@ -46,6 +63,11 @@ function navSectionsForRole(role: string | undefined) {
           { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange, end: false },
         ],
       },
+      {
+        heading: "Meeting Management",
+        items: [planningMeetings],
+      },
+      { heading: "Alerts", items: [notifications] },
     ];
   }
 
@@ -56,10 +78,26 @@ function navSectionsForRole(role: string | undefined) {
         heading: "TEAM MANAGEMENT",
         items: [{ label: "My Team", to: "/supervisor/my-team", icon: Users, end: true }],
       },
+      {
+        heading: "Meeting Management",
+        items: [planningMeetings],
+      },
+      { heading: "Alerts", items: [notifications] },
     ];
   }
 
-  return [{ heading: "", items: [dashboard] }];
+  if (role === "EMPLOYEE") {
+    return [
+      { heading: "", items: [dashboard] },
+      {
+        heading: "Meeting Management",
+        items: [planningMeetings],
+      },
+      { heading: "Alerts", items: [notifications] },
+    ];
+  }
+
+  return [{ heading: "", items: [dashboard, notifications] }];
 }
 
 export default function DashboardLayout({ children }: Props) {
@@ -182,7 +220,9 @@ export default function DashboardLayout({ children }: Props) {
                     <Bell className="h-4 w-4" />
                   </Button>
                   {unreadCount > 0 ? (
-                    <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500" />
+                    <span className="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
                   ) : null}
                   {notificationsOpen ? (
                     <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-stone-200 bg-white p-3 shadow-xl dark:border-stone-700 dark:bg-stone-900">
@@ -206,6 +246,13 @@ export default function DashboardLayout({ children }: Props) {
                           ))
                         )}
                       </div>
+                      <Link
+                        to="/notifications"
+                        className="mt-2 block rounded-xl px-2 py-2 text-sm text-stone-600 hover:bg-stone-50 dark:text-stone-300 dark:hover:bg-stone-800"
+                        onClick={() => setNotificationsOpen(false)}
+                      >
+                        View all notifications
+                      </Link>
                     </div>
                   ) : null}
                 </div>

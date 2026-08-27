@@ -89,6 +89,12 @@ export interface EmployeeAppraisalProgress {
     pipStatus: string;
     pipSummary: string | null;
     supervisorComments: string | null;
+    bonusAwarded?: boolean;
+    bonusAmount?: number | null;
+    bonusNotes?: string | null;
+    promotionRecommended?: boolean;
+    promotionTitle?: string | null;
+    promotionNotes?: string | null;
   } | null;
 }
 

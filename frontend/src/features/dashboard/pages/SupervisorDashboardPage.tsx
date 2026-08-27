@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { formatDate } from "@/features/hr/utils/dates";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { useMyDashboard } from "@/features/dashboard/hooks/useDashboard";
@@ -56,9 +57,12 @@ export default function SupervisorDashboardPage() {
                     {data.team.map((member) => (
                       <tr key={member.id}>
                         <td className="py-3">
-                          <p className="font-medium text-stone-900 dark:text-white">
+                          <Link
+                            to={`/supervisor/my-team/${member.id}`}
+                            className="font-medium text-stone-900 hover:underline dark:text-white"
+                          >
                             {member.name}
-                          </p>
+                          </Link>
                           <p className="text-xs text-stone-500">
                             {member.jobTitle ?? member.companyEmail}
                           </p>

@@ -53,7 +53,17 @@ const labels: Record<string, string> = {
   APPROVED: "Approved",
   RESCHEDULE_REQUESTED: "Reschedule Requested",
   RESCHEDULED: "Rescheduled",
-  CANCELLED: "Cancelled",
+  PLANNING_MEETING: "Planning Meeting",
+  PDP_CREATION: "PDP Creation",
+  PDP_APPROVED: "PDP Approved",
+  PROGRESS_PERIOD: "Appraisal Period",
+  SELF_REVIEW: "Self Review",
+  PEER_REVIEW: "Peer Review",
+  SUPERVISOR_REVIEW: "Supervisor Review",
+  HR_EVALUATION: "HR Evaluation",
+  RECOGNITION_PIP: "Results / PIP",
+  CLOSURE: "Closed",
+  CONFIGURATION: "Configuration",
 };
 
 export function StatusBadge({

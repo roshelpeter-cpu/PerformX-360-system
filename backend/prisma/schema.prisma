@@ -59,6 +59,8 @@ model Employee {
   supervisorAssignmentHistoryAsPrev     SupervisorAssignmentHistory[]  @relation("SupervisorHistoryPrevious")
   unauthorizedAccessAttempts            UnauthorizedAccessAttempt[]
   cycleProgress                         EmployeeCycleProgress[]
+  appraisalReviews                      AppraisalReview[]              @relation("AppraisalReviewEmployee")
+  appraisalReviewsAuthored              AppraisalReview[]              @relation("AppraisalReviewReviewer")
 }
 
 model AppraisalCycle {
@@ -88,6 +90,7 @@ model AppraisalCycle {
   pdps                        PersonalDevelopmentPlan[]
   supervisorAssignmentHistory SupervisorAssignmentHistory[]
   employeeProgress            EmployeeCycleProgress[]
+  appraisalReviews            AppraisalReview[]
 
   @@index([status])
   @@index([startDate])
@@ -445,6 +448,13 @@ model AppraisalOutcome {
   pipRequired                Boolean         @default(false)
   pipStatus                  PipStatus       @default(NONE)
   pipSummary                 String?
+  /// Recognition extras used by current and historical employee records.
+  bonusAwarded               Boolean         @default(false)
+  bonusAmount                Float?
+  bonusNotes                 String?
+  promotionRecommended       Boolean         @default(false)
+  promotionTitle             String?
+  promotionNotes             String?
   createdAt                  DateTime        @default(now())
   updatedAt                  DateTime        @updatedAt
   batch                      AppraisalBatch? @relation(fields: [batchId], references: [id])
@@ -453,6 +463,26 @@ model AppraisalOutcome {
 
   @@unique([cycleId, employeeId])
   @@index([employeeId])
+}
+
+/// Stored self / peer / supervisor review for a cycle (current or historical).
+model AppraisalReview {
+  id          String              @id @default(cuid())
+  employeeId  String
+  cycleId     String
+  reviewerId  String?
+  kind        AppraisalReviewKind
+  score       Float?
+  comments    String?
+  completedAt DateTime
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  cycle       AppraisalCycle      @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee    Employee            @relation("AppraisalReviewEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewer    Employee?           @relation("AppraisalReviewReviewer", fields: [reviewerId], references: [id])
+
+  @@index([employeeId, cycleId])
+  @@index([cycleId])
 }
 
 /// Per-employee appraisal stage for a cycle.
@@ -617,6 +647,7 @@ enum NotificationType {
   MEETING_ALL_ACCEPTED
   MEETING_RESCHEDULED
   MEETING_CONFIRMED
+  MEETING_COMPLETED
   FOLLOW_UP_SCHEDULED
   FOLLOW_UP_REMINDER
   FOLLOW_UP_RESCHEDULE_REQUEST
@@ -764,4 +795,10 @@ enum PipStatus {
   ASSIGNED
   ACTIVE
   COMPLETED
+}
+
+enum AppraisalReviewKind {
+  SELF
+  PEER
+  SUPERVISOR
 }

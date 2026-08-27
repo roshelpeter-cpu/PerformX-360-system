@@ -8,6 +8,8 @@ import EmployeeDashboardPage from "@/features/dashboard/pages/EmployeeDashboardP
 import SupervisorDashboardPage from "@/features/dashboard/pages/SupervisorDashboardPage";
 import MyTeamPage from "@/features/supervisor/pages/MyTeamPage";
 import TeamMemberDetailPage from "@/features/supervisor/pages/TeamMemberDetailPage";
+import PlanningMeetingsPage from "@/features/meetings/pages/PlanningMeetingsPage";
+import NotificationsPage from "@/features/notifications/pages/NotificationsPage";
 import HrDashboardPage from "@/features/dashboard/pages/HrDashboardPage";
 import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashboardPage";
 import EmployeesPage from "@/features/employees/pages/EmployeesPage";
@@ -72,6 +74,38 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
                 <TeamMemberDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings/planning"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <PlanningMeetingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings/planning"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <PlanningMeetingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/planning"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <PlanningMeetingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE", "SUPERVISOR", "HR", "LEADERSHIP"]}>
+                <NotificationsPage />
               </ProtectedRoute>
             }
           />

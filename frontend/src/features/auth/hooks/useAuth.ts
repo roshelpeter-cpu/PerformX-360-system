@@ -12,6 +12,7 @@ import {
   getMyNotificationsRequest,
   loginRequest,
   logoutRequest,
+  markAllNotificationsReadRequest,
   markNotificationReadRequest,
   reportUnauthorizedAccessRequest,
 } from "@/features/auth/services/auth.api";
@@ -106,10 +107,10 @@ export function useReportUnauthorizedAccess() {
   });
 }
 
-export function useMyNotifications(enabled = true) {
+export function useMyNotifications(enabled = true, category = "all") {
   return useQuery({
-    queryKey: ["auth", "notifications"],
-    queryFn: getMyNotificationsRequest,
+    queryKey: ["auth", "notifications", category],
+    queryFn: () => getMyNotificationsRequest(category),
     enabled,
     refetchInterval: 60_000,
   });
@@ -119,6 +120,16 @@ export function useMarkNotificationRead() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: markNotificationReadRequest,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "notifications"] });
+    },
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: markAllNotificationsReadRequest,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["auth", "notifications"] });
     },

@@ -87,16 +87,81 @@ export async function getHrNotifications(limit = 20) {
     },
   });
 }
+
+const MEETING_TYPES: NotificationType[] = [
+  "MEETING_INVITATION",
+  "MEETING_RESPONSE",
+  "MEETING_RESCHEDULE_REQUEST",
+  "MEETING_ALL_ACCEPTED",
+  "MEETING_RESCHEDULED",
+  "MEETING_CONFIRMED",
+  "MEETING_COMPLETED",
+  "FOLLOW_UP_SCHEDULED",
+  "FOLLOW_UP_REMINDER",
+  "FOLLOW_UP_RESCHEDULE_REQUEST",
+];
+
+const PDP_TYPES: NotificationType[] = [
+  "PDP_APPROVED",
+  "PDP_SUBMITTED",
+  "PDP_HR_FEEDBACK",
+  "PDP_EMPLOYEE_RESPONSE",
+  "PDP_CHANGES_REQUESTED",
+  "PDP_INTERVENTION_REQUIRED",
+];
+
+const REVIEW_TYPES: NotificationType[] = [
+  "SELF_REVIEW_STARTED",
+  "BATCH_STAGE_CHANGED",
+];
+
+const SYSTEM_TYPES: NotificationType[] = [
+  "PASSWORD_RESET_REQUEST",
+  "SECURITY_WARNING",
+  "PASSWORD_RESET_COMPLETE",
+];
+
+export type NotificationCategory =
+  | "all"
+  | "unread"
+  | "meetings"
+  | "pdp"
+  | "reviews"
+  | "system"
+  | "employee";
+
+function categoryWhere(
+  category?: NotificationCategory
+): Prisma.NotificationWhereInput {
+  if (!category || category === "all") return {};
+  if (category === "unread") return { status: "UNREAD" };
+  if (category === "meetings") return { type: { in: MEETING_TYPES } };
+  if (category === "pdp") return { type: { in: PDP_TYPES } };
+  if (category === "reviews") return { type: { in: REVIEW_TYPES } };
+  if (category === "system") return { type: { in: SYSTEM_TYPES } };
+  return { subjectEmployeeId: { not: null } };
+}
+
+export function notificationCategory(
+  type: NotificationType
+): Exclude<NotificationCategory, "all" | "unread"> {
+  if (MEETING_TYPES.includes(type)) return "meetings";
+  if (PDP_TYPES.includes(type)) return "pdp";
+  if (REVIEW_TYPES.includes(type)) return "reviews";
+  if (SYSTEM_TYPES.includes(type)) return "system";
+  return "employee";
+}
+
 export async function getNotificationsForUser(
   userId: string,
-  limit = 50
+  limit = 50,
+  category?: NotificationCategory
 ) {
+  // Personal inbox only — recipientId must match the signed-in user.
   return prisma.notification.findMany({
     where: {
-      OR: [
-        { recipientId: userId },
-        { recipientId: null },
-      ],
+      recipientId: userId,
+      ...categoryWhere(category),
     },
     orderBy: {
       createdAt: "desc",
@@ -116,13 +181,35 @@ export async function getNotificationsForUser(
 export async function getUnreadNotificationCount(userId: string) {
   return prisma.notification.count({
     where: {
-      OR: [
-        { recipientId: userId },
-        { recipientId: null },
-      ],
+      recipientId: userId,
       status: "UNREAD",
     },
   });
+}
+
+export async function getNotificationCounts(userId: string) {
+  const [all, unread, meetings, pdp, reviews, system, employee] =
+    await Promise.all([
+      prisma.notification.count({ where: { recipientId: userId } }),
+      getUnreadNotificationCount(userId),
+      prisma.notification.count({
+        where: { recipientId: userId, type: { in: MEETING_TYPES } },
+      }),
+      prisma.notification.count({
+        where: { recipientId: userId, type: { in: PDP_TYPES } },
+      }),
+      prisma.notification.count({
+        where: { recipientId: userId, type: { in: REVIEW_TYPES } },
+      }),
+      prisma.notification.count({
+        where: { recipientId: userId, type: { in: SYSTEM_TYPES } },
+      }),
+      prisma.notification.count({
+        where: { recipientId: userId, subjectEmployeeId: { not: null } },
+      }),
+    ]);
+
+  return { all, unread, meetings, pdp, reviews, system, employee };
 }
 
 export async function markNotificationRead(
@@ -132,10 +219,7 @@ export async function markNotificationRead(
   const notification = await prisma.notification.findFirst({
     where: {
       id: notificationId,
-      OR: [
-        { recipientId: userId },
-        { recipientId: null },
-      ],
+      recipientId: userId,
     },
   });
 
@@ -156,10 +240,7 @@ export async function markNotificationRead(
 export async function markAllNotificationsRead(userId: string) {
   return prisma.notification.updateMany({
     where: {
-      OR: [
-        { recipientId: userId },
-        { recipientId: null },
-      ],
+      recipientId: userId,
       status: "UNREAD",
     },
     data: {

@@ -1,11 +1,14 @@
 import { Link } from "react-router-dom";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import ActiveCycleSummaryCard from "@/features/hr/components/ActiveCycleSummaryCard";
+import { StatusBadge } from "@/features/hr/components/StatusBadge";
+import { formatDateTime } from "@/features/hr/utils/dates";
 import {
   useCurrentAppraisalCycle,
   useWorkforceSummary,
 } from "@/features/hr/hooks/useAppraisalCycles";
 import { useMyDashboard } from "@/features/dashboard/hooks/useDashboard";
+import { usePlanningMeetings } from "@/features/meetings/hooks/useMeetings";
 import {
   DashboardError,
   DashboardHero,
@@ -19,9 +22,12 @@ export default function HrDashboardPage() {
   const dashboardQuery = useMyDashboard();
   const workforceQuery = useWorkforceSummary();
   const currentQuery = useCurrentAppraisalCycle();
+  // Reuse the planning-meetings API so the HR home page shows current PPM status.
+  const planningQuery = usePlanningMeetings({ tab: "all", page: 1 });
   const workforce = workforceQuery.data;
   const current = currentQuery.data as AppraisalCycle | null | undefined;
   const data = dashboardQuery.data;
+  const planning = planningQuery.data;
 
   const loading =
     dashboardQuery.isLoading || workforceQuery.isLoading || currentQuery.isLoading;
@@ -67,6 +73,39 @@ export default function HrDashboardPage() {
               </p>
             </Panel>
           )}
+
+          <Panel title="Performance Planning Meetings">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <StatCard label="Upcoming" value={planning?.stats.upcoming ?? 0} />
+              <StatCard label="Completed" value={planning?.stats.completed ?? 0} />
+              <StatCard
+                label="Pending requests"
+                value={planning?.stats.pendingRequests ?? 0}
+              />
+            </div>
+            <div className="mt-4 space-y-2">
+              {(planning?.meetings ?? []).slice(0, 4).map((meeting) => (
+                <div
+                  key={meeting.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-stone-200 px-3 py-2 dark:border-stone-800"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{meeting.title}</p>
+                    <p className="text-xs text-stone-500">
+                      {formatDateTime(meeting.scheduledAt)}
+                    </p>
+                  </div>
+                  <StatusBadge status={meeting.status} />
+                </div>
+              ))}
+            </div>
+            <Link
+              to="/hr/meetings/planning"
+              className="mt-4 inline-flex h-11 items-center justify-center rounded-xl border border-stone-300 px-5 text-sm font-medium dark:border-stone-700"
+            >
+              Manage planning meetings
+            </Link>
+          </Panel>
 
           <div className="flex flex-wrap gap-3">
             <Link

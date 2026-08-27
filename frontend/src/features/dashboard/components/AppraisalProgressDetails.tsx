@@ -35,6 +35,7 @@ export function AppraisalProgressDetails({
 }) {
   const pdp = progress.pdp;
   const outcome = progress.outcome;
+  const meetingDone = progress.planningMeetingCompleted;
 
   return (
     <div className="space-y-4">
@@ -68,32 +69,44 @@ export function AppraisalProgressDetails({
         <div className="mt-2 divide-y divide-stone-100 dark:divide-stone-800">
           <StatusLine
             label="Planning meeting"
-            value={progress.planningMeetingCompleted ? "Completed" : "Not completed"}
+            value={meetingDone ? "Completed" : "Not completed"}
+            tone={meetingDone ? "default" : "current"}
           />
-          <StatusLine
-            label="PDP created"
-            value={pdp?.created ? "Yes" : "No"}
-          />
-          <StatusLine
-            label="Sent to employee"
-            value={pdp?.sentToEmployee ? "Yes" : "No"}
-          />
-          <StatusLine
-            label="Approval"
-            value={
-              pdp?.approved
-                ? "Approved"
-                : pdp?.approvalPending
-                  ? "Pending employee approval"
-                  : pdp
-                    ? pdp.status.replaceAll("_", " ")
-                    : "Not started"
-            }
-            tone={pdp?.approvalPending ? "current" : "default"}
-          />
+          {meetingDone ? (
+            <>
+              <StatusLine
+                label="PDP created"
+                value={pdp?.created ? "Yes" : "No"}
+              />
+              <StatusLine
+                label="Sent to employee"
+                value={pdp?.sentToEmployee ? "Yes" : "No"}
+              />
+              <StatusLine
+                label="Approval"
+                value={
+                  pdp?.approved
+                    ? "Approved"
+                    : pdp?.approvalPending
+                      ? "Pending employee approval"
+                      : pdp
+                        ? pdp.status.replaceAll("_", " ")
+                        : "Not started"
+                }
+                tone={pdp?.approvalPending ? "current" : "default"}
+              />
+            </>
+          ) : (
+            <p className="py-2 text-sm text-stone-500">
+              Later appraisal details appear after the performance planning
+              meeting is completed.
+            </p>
+          )}
         </div>
       </section>
 
+      {meetingDone ? (
+        <>
       <section className="rounded-2xl border border-stone-200 bg-white p-5 dark:border-stone-800 dark:bg-stone-900">
         <h3 className="text-sm font-semibold text-stone-900 dark:text-white">
           Meetings & reviews
@@ -170,8 +183,28 @@ export function AppraisalProgressDetails({
                 {outcome.pipSummary}
               </p>
             ) : null}
+            <StatusLine
+              label="Bonus"
+              value={
+                outcome.bonusAwarded
+                  ? outcome.bonusAmount
+                    ? `Rs. ${outcome.bonusAmount.toLocaleString()}`
+                    : "Awarded"
+                  : "None"
+              }
+            />
+            <StatusLine
+              label="Promotion"
+              value={
+                outcome.promotionRecommended
+                  ? outcome.promotionTitle ?? "Recommended"
+                  : "None"
+              }
+            />
           </div>
         </section>
+      ) : null}
+        </>
       ) : null}
     </div>
   );

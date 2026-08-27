@@ -20,7 +20,9 @@ import bcrypt from "bcrypt";
 import {
   applyCompletedBatchProgress,
   applyCurrentCycleBatchProgress,
+  seedAdditionalPlanningMeetings,
   seedCycleHistoriesAndOutcomes,
+  seedDemoEmployeeHistory,
   seedDemoEmployeeScenarios,
   seedNeedsAssignmentJoiners,
 } from "./seed-appraisal-data.js";
@@ -481,7 +483,9 @@ async function main() {
 
 async function resetCycleData() {
   // Child appraisal records first — meetings are not cascaded from cycles.
+  await prisma.notification.deleteMany();
   await prisma.employeeCycleProgress.deleteMany();
+  await prisma.appraisalReview.deleteMany();
   await prisma.appraisalOutcome.deleteMany();
   await prisma.pdpReviewComment.deleteMany();
   await prisma.pdpGoal.deleteMany();
@@ -737,6 +741,18 @@ async function seedAppraisalCycles(
   });
 
   await seedDemoEmployeeScenarios(prisma, {
+    hrUserId,
+    cycleId: active.id,
+    batches: active.batches,
+  });
+  await seedDemoEmployeeHistory(prisma, {
+    hrUserId,
+    cycles: [
+      { id: cycle2024.id, year: 2024, batches: cycle2024.batches },
+      { id: historical.id, year: 2025, batches: historical.batches },
+    ],
+  });
+  await seedAdditionalPlanningMeetings(prisma, {
     hrUserId,
     cycleId: active.id,
     batches: active.batches,

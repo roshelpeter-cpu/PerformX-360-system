@@ -52,7 +52,8 @@ export async function reportUnauthorizedAccessRequest(attemptedRoute: string) {
   });
 }
 
-export async function getMyNotificationsRequest() {
+export async function getMyNotificationsRequest(category?: string) {
+  const qs = category && category !== "all" ? `?category=${category}` : "";
   return apiRequest<{
     success: true;
     notifications: Array<{
@@ -61,15 +62,31 @@ export async function getMyNotificationsRequest() {
       title: string;
       message: string;
       status: "UNREAD" | "READ";
+      category: string;
       metadata: Record<string, unknown> | null;
       createdAt: string;
     }>;
     unreadCount: number;
-  }>("/auth/notifications");
+    counts: {
+      all: number;
+      unread: number;
+      meetings: number;
+      pdp: number;
+      reviews: number;
+      system: number;
+      employee: number;
+    };
+  }>(`/auth/notifications${qs}`);
 }
 
 export async function markNotificationReadRequest(id: string) {
   return apiRequest<{ success: true }>(`/auth/notifications/${id}/read`, {
+    method: "POST",
+  });
+}
+
+export async function markAllNotificationsReadRequest() {
+  return apiRequest<{ success: true }>("/auth/notifications/read-all", {
     method: "POST",
   });
 }

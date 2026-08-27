@@ -44,7 +44,7 @@ export default function AppraisalSnapshotBanner({
       <div className="grid gap-0 sm:grid-cols-2 xl:grid-cols-4">
         <SnapshotCell
           icon={CalendarRange}
-          iconClass="bg-violet-100 text-violet-700 dark:bg-violet-400/20 dark:text-violet-300"
+          iconClass="bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300"
           title="Appraisal Cycle"
           value={cycle?.name ?? "Not assigned"}
           badgeStatus={cycle?.status}
@@ -56,7 +56,7 @@ export default function AppraisalSnapshotBanner({
         />
         <SnapshotCell
           icon={Layers3}
-          iconClass="bg-sky-100 text-sky-700 dark:bg-sky-400/20 dark:text-sky-300"
+          iconClass="bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300"
           title="My Batch"
           value={batch?.name ?? "Not assigned"}
           detail={
