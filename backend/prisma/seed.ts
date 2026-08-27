@@ -1,15 +1,16 @@
 /**
- * DEVELOPMENT-ONLY seed for authentication and Appraisal Cycle Management.
+ * Workforce and authentication seed.
  * Do NOT use these credentials in production.
  *
  * Run with: npm run db:seed
  *
  * Dataset targets:
- * - 15 realistic IT-company departments
- * - 693 EMPLOYEE + 170 SUPERVISOR = 863 assignable people
- * - 2025 COMPLETED historical cycle
- * - 2026 ACTIVE demonstration cycle (small unassigned set for lecturer demos)
- * - 2027 UPCOMING confirmed cycle
+ * - 15 departments
+ * - ~900 EMPLOYEE records plus supervisors, HR, and leadership
+ * - Persistent batch and supervisor assignments for each appraisal cycle
+ * - 2025 COMPLETED, 2026 ACTIVE, and 2027 UPCOMING cycles
+ *
+ * Re-runs skip existing employee IDs and rebuild cycle assignments only.
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -59,6 +60,43 @@ const LAST_NAMES = [
   "Karunaratne", "Mendis", "Abeysekera", "Pathirana", "Weerasinghe", "Cooray",
   "Samarasinghe", "Herath",
 ];
+
+const JOB_TITLES: Record<string, string> = {
+  Engineering: "Software Engineer",
+  "Information Technology": "Systems Analyst",
+  "Product Management": "Product Analyst",
+  "Quality Assurance": "QA Engineer",
+  "DevOps / Cloud": "Cloud Engineer",
+  Cybersecurity: "Security Analyst",
+  "Data & Analytics": "Data Analyst",
+  "UI/UX Design": "Product Designer",
+  "Human Resources": "HR Specialist",
+  Finance: "Finance Analyst",
+  Sales: "Account Executive",
+  Marketing: "Marketing Specialist",
+  "Customer Success": "Customer Success Specialist",
+  Operations: "Operations Coordinator",
+  Administration: "Administrative Officer",
+};
+
+/** Additional EMPLOYEE records so the workforce reaches ~900 without shifting existing IDs. */
+const EXTRA_EMPLOYEES_BY_DEPT: Record<string, number> = {
+  Engineering: 36,
+  "Information Technology": 27,
+  "Product Management": 12,
+  "Quality Assurance": 16,
+  "DevOps / Cloud": 13,
+  Cybersecurity: 8,
+  "Data & Analytics": 14,
+  "UI/UX Design": 9,
+  "Human Resources": 7,
+  Finance: 12,
+  Sales: 15,
+  Marketing: 10,
+  "Customer Success": 10,
+  Operations: 11,
+  Administration: 7,
+};
 
 function mulberry32(seed: number) {
   return function random() {
@@ -193,12 +231,133 @@ async function main() {
     });
   }
 
+  const extraHrAccounts = [
+    {
+      employeeId: "HR000002",
+      name: "Priya Jayawardena",
+      jobTitle: "HR Business Partner",
+    },
+    {
+      employeeId: "HR000003",
+      name: "Rohan Bandara",
+      jobTitle: "HR Operations Lead",
+    },
+    {
+      employeeId: "HR000004",
+      name: "Fathima Hassan",
+      jobTitle: "Talent Manager",
+    },
+    {
+      employeeId: "HR000005",
+      name: "Ishara Cooray",
+      jobTitle: "HR Officer",
+    },
+    {
+      employeeId: "HR000006",
+      name: "Malsha Herath",
+      jobTitle: "Compensation Specialist",
+    },
+    {
+      employeeId: "HR000007",
+      name: "Sanjaya Wickramasinghe",
+      jobTitle: "People Analytics Lead",
+    },
+    {
+      employeeId: "HR000008",
+      name: "Nethmi Abeysekera",
+      jobTitle: "HR Coordinator",
+    },
+  ];
+
+  const extraLeadershipAccounts = [
+    {
+      employeeId: "LED000002",
+      name: "Amaya Fernando",
+      jobTitle: "Chief Operating Officer",
+      departmentName: "Operations",
+    },
+    {
+      employeeId: "LED000003",
+      name: "Kasun Rajapaksha",
+      jobTitle: "Chief Financial Officer",
+      departmentName: "Finance",
+    },
+    {
+      employeeId: "LED000004",
+      name: "Meera Rahman",
+      jobTitle: "Chief People Officer",
+      departmentName: "Human Resources",
+    },
+    {
+      employeeId: "LED000005",
+      name: "Gihan Mendis",
+      jobTitle: "Head of Product",
+      departmentName: "Product Management",
+    },
+    {
+      employeeId: "LED000006",
+      name: "Thilini Pathirana",
+      jobTitle: "Head of Sales",
+      departmentName: "Sales",
+    },
+  ];
+
+  for (const account of extraHrAccounts) {
+    await prisma.employee.upsert({
+      where: { employeeId: account.employeeId },
+      update: {
+        passwordHash,
+        name: account.name,
+        role: "HR",
+        jobTitle: account.jobTitle,
+        companyEmail: `${account.employeeId.toLowerCase()}@altrium.local`,
+        departmentId: hrDept.id,
+      },
+      create: {
+        employeeId: account.employeeId,
+        name: account.name,
+        role: "HR",
+        jobTitle: account.jobTitle,
+        companyEmail: `${account.employeeId.toLowerCase()}@altrium.local`,
+        departmentId: hrDept.id,
+        passwordHash,
+      },
+    });
+  }
+
+  for (const account of extraLeadershipAccounts) {
+    const departmentId =
+      departmentRecords.find((item) => item.name === account.departmentName)?.id ??
+      engineering.id;
+    await prisma.employee.upsert({
+      where: { employeeId: account.employeeId },
+      update: {
+        passwordHash,
+        name: account.name,
+        role: "LEADERSHIP",
+        jobTitle: account.jobTitle,
+        companyEmail: `${account.employeeId.toLowerCase()}@altrium.local`,
+        departmentId,
+      },
+      create: {
+        employeeId: account.employeeId,
+        name: account.name,
+        role: "LEADERSHIP",
+        jobTitle: account.jobTitle,
+        companyEmail: `${account.employeeId.toLowerCase()}@altrium.local`,
+        departmentId,
+        passwordHash,
+      },
+    });
+  }
+
   const people: Array<{
     employeeId: string;
     name: string;
     role: Role;
     companyEmail: string;
     departmentId: string;
+    jobTitle: string;
   }> = [];
 
   let supervisorSeq = 1;
@@ -217,6 +376,7 @@ async function main() {
         role: "SUPERVISOR",
         companyEmail: `${employeeId.toLowerCase()}@altrium.local`,
         departmentId: department.id,
+        jobTitle: `${department.name} Supervisor`,
       });
     }
 
@@ -232,6 +392,27 @@ async function main() {
         role: "EMPLOYEE",
         companyEmail: `${employeeId.toLowerCase()}@altrium.local`,
         departmentId: department.id,
+        jobTitle: JOB_TITLES[department.name] ?? "Staff",
+      });
+    }
+  }
+
+  let extraEmployeeSeq = 694;
+  for (const department of departmentRecords) {
+    const extraCount = EXTRA_EMPLOYEES_BY_DEPT[department.name] ?? 0;
+    for (let index = 0; index < extraCount; index += 1) {
+      const employeeId = `EMP${pad(extraEmployeeSeq)}`;
+      extraEmployeeSeq += 1;
+      if (reservedEmployeeIds.has(employeeId)) continue;
+      const first = FIRST_NAMES[Math.floor(random() * FIRST_NAMES.length)]!;
+      const last = LAST_NAMES[Math.floor(random() * LAST_NAMES.length)]!;
+      people.push({
+        employeeId,
+        name: `${first} ${last}`,
+        role: "EMPLOYEE",
+        companyEmail: `${employeeId.toLowerCase()}@altrium.local`,
+        departmentId: department.id,
+        jobTitle: JOB_TITLES[department.name] ?? "Staff",
       });
     }
   }
@@ -251,15 +432,40 @@ async function main() {
 
   await seedAppraisalCycles(hrUser.id, random);
 
+  for (const department of departmentRecords) {
+    await prisma.employee.updateMany({
+      where: {
+        departmentId: department.id,
+        role: "EMPLOYEE",
+        jobTitle: null,
+      },
+      data: { jobTitle: JOB_TITLES[department.name] ?? "Staff" },
+    });
+    await prisma.employee.updateMany({
+      where: {
+        departmentId: department.id,
+        role: "SUPERVISOR",
+        jobTitle: null,
+      },
+      data: { jobTitle: `${department.name} Supervisor` },
+    });
+  }
+
   const employeeCount = await prisma.employee.count({ where: { role: "EMPLOYEE" } });
   const supervisorCount = await prisma.employee.count({
     where: { role: "SUPERVISOR" },
   });
+  const hrCount = await prisma.employee.count({ where: { role: "HR" } });
+  const leadershipCount = await prisma.employee.count({
+    where: { role: "LEADERSHIP" },
+  });
 
-  console.log("Development seed completed.");
-  console.log(`Employees: ${employeeCount} | Supervisors: ${supervisorCount}`);
-  console.log("DEVELOPMENT-ONLY password for all seeded users:", DEV_PASSWORD);
-  console.log("Named demo accounts:");
+  console.log("Workforce seed completed.");
+  console.log(
+    `Employees: ${employeeCount} | Supervisors: ${supervisorCount} | HR: ${hrCount} | Leadership: ${leadershipCount}`
+  );
+  console.log("Password for all seeded users:", DEV_PASSWORD);
+  console.log("Named accounts:");
   for (const account of namedAccounts) {
     console.log(`  ${account.employeeId}  ${account.role.padEnd(11)}  ${account.name}`);
   }
@@ -375,7 +581,7 @@ async function seedAppraisalCycles(
 
   const historical = await createCycle({
     name: "2025 Annual Appraisal",
-    description: "Completed historical appraisal cycle retained for reference.",
+    description: "Completed historical appraisal cycle retained for reporting.",
     status: "COMPLETED",
     start: utcDate(2025, 3, 1),
     batchStarts: [utcDate(2025, 3, 1), utcDate(2025, 5, 1), utcDate(2025, 8, 1)],
@@ -387,7 +593,7 @@ async function seedAppraisalCycles(
   const active = await createCycle({
     name: "2026 Annual Appraisal",
     description:
-      "Current active appraisal cycle. Most employees are already assigned; a small set of new joiners still need a batch or supervisor.",
+      "Current active appraisal cycle. Employees are assigned to batches and supervisors for the year.",
     status: "ACTIVE",
     start: utcDate(2026, 3, 1),
     batchStarts: [utcDate(2026, 3, 1), utcDate(2026, 5, 1), utcDate(2026, 10, 1)],
@@ -405,42 +611,20 @@ async function seedAppraisalCycles(
   });
 
   const employeesOnly = assignable.filter((person) => person.role === "EMPLOYEE");
-  const unassignedNeither = new Set(
-    employeesOnly.slice(-7, -2).map((person) => person.id)
-  );
-  const unassignedBatchOnly = new Set(
-    employeesOnly.slice(-2).map((person) => person.id)
-  );
-  const unassignedSupervisorOnly = new Set(
-    employeesOnly.slice(-12, -7).map((person) => person.id)
-  );
 
-  async function assignCycle(
-    cycle: typeof active,
-    mode: "full" | "demo-active"
-  ) {
+  async function assignCycle(cycle: typeof active) {
     const batchAssignments = [];
     const supervisorAssignments = [];
 
     for (const person of assignable) {
-      const skipBatch =
-        mode === "demo-active" &&
-        (unassignedNeither.has(person.id) || unassignedBatchOnly.has(person.id));
-      const skipSupervisor =
-        mode === "demo-active" &&
-        (unassignedNeither.has(person.id) ||
-          unassignedSupervisorOnly.has(person.id));
+      const batch = cycle.batches[pickBatchIndex(person.employeeId)]!;
+      batchAssignments.push({
+        cycleId: cycle.id,
+        batchId: batch.id,
+        employeeId: person.id,
+      });
 
-      if (!skipBatch) {
-        const batch = cycle.batches[pickBatchIndex(person.employeeId)]!;
-        batchAssignments.push({
-          cycleId: cycle.id,
-          batchId: batch.id,
-          employeeId: person.id,
-        });
-      }
-
-      if (person.role === "EMPLOYEE" && !skipSupervisor) {
+      if (person.role === "EMPLOYEE") {
         const supervisorId = pickSupervisor(person.departmentId);
         if (supervisorId) {
           supervisorAssignments.push({
@@ -469,13 +653,13 @@ async function seedAppraisalCycles(
   }
 
   for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
-  await assignCycle(historical, "full");
+  await assignCycle(historical);
 
   for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
-  await assignCycle(active, "demo-active");
+  await assignCycle(active);
 
   for (const supervisor of supervisors) supervisorLoad.set(supervisor.id, 0);
-  await assignCycle(upcoming, "full");
+  await assignCycle(upcoming);
 
   const sampleEmployee = employeesOnly[20];
   const sampleEmployee2 = employeesOnly[35];
@@ -510,7 +694,7 @@ async function seedAppraisalCycles(
     }
   }
 
-  console.log("Appraisal cycle demo data seeded.");
+  console.log("Appraisal cycle workforce assignments seeded.");
   console.log(
     `Cycles: ${historical.name} (COMPLETED), ${active.name} (ACTIVE), ${upcoming.name} (UPCOMING)`
   );

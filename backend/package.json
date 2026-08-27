@@ -15,7 +15,8 @@
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/start-postgres.ps1",
     "db:reset-schema": "node scripts/reset-public-schema.mjs",
     "db:setup": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts",
-    "test:auth": "tsx scripts/verify-auth.ts"
+    "test:auth": "tsx scripts/verify-auth.ts",
+    "test:employees": "tsx scripts/verify-employees.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

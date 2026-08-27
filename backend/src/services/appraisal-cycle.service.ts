@@ -52,6 +52,7 @@ export const employeePublicSelect = {
   name: true,
   companyEmail: true,
   role: true,
+  jobTitle: true,
   departmentId: true,
   department: { select: { id: true, name: true } },
 } as const;

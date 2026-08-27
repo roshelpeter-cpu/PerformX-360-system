@@ -8,6 +8,7 @@ import EmployeeDashboardPage from "@/features/dashboard/pages/EmployeeDashboardP
 import SupervisorDashboardPage from "@/features/dashboard/pages/SupervisorDashboardPage";
 import HrDashboardPage from "@/features/dashboard/pages/HrDashboardPage";
 import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashboardPage";
+import EmployeesPage from "@/features/employees/pages/EmployeesPage";
 import AppraisalCyclesPage from "@/features/hr/pages/AppraisalCyclesPage";
 import AppraisalCycleDetailPage from "@/features/hr/pages/AppraisalCycleDetailPage";
 import BatchDetailPage from "@/features/hr/pages/BatchDetailPage";
@@ -61,6 +62,14 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["HR"]}>
                 <HrDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/employees"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <EmployeesPage />
               </ProtectedRoute>
             }
           />

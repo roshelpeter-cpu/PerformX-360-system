@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Bell,
+  CalendarRange,
   ChevronDown,
   LayoutDashboard,
   LogOut,
@@ -9,7 +10,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  CalendarRange,
+  Users,
 } from "lucide-react";
 import ThemeToggle from "@/components/common/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -24,21 +25,31 @@ interface Props {
   children: ReactNode;
 }
 
-function navItemsForRole(role: string | undefined) {
+function navSectionsForRole(role: string | undefined) {
   const dashboard = {
     label: "Dashboard",
     to: role ? getDashboardPathForRole(role as "EMPLOYEE" | "SUPERVISOR" | "HR" | "LEADERSHIP") : "/",
     icon: LayoutDashboard,
+    end: true,
   };
 
   if (role === "HR") {
     return [
-      dashboard,
-      { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange },
+      { heading: "Dashboard", items: [dashboard] },
+      {
+        heading: "Employee Management",
+        items: [{ label: "Employees", to: "/hr/employees", icon: Users, end: true }],
+      },
+      {
+        heading: "Performance Management",
+        items: [
+          { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange, end: false },
+        ],
+      },
     ];
   }
 
-  return [dashboard];
+  return [{ heading: "", items: [dashboard] }];
 }
 
 export default function DashboardLayout({ children }: Props) {
@@ -53,7 +64,7 @@ export default function DashboardLayout({ children }: Props) {
   const notificationsQuery = useMyNotifications(Boolean(user));
   const notifications = notificationsQuery.data?.notifications ?? [];
   const unreadCount = notificationsQuery.data?.unreadCount ?? 0;
-  const items = navItemsForRole(user?.role);
+  const sections = navSectionsForRole(user?.role);
 
   return (
     <div className="min-h-screen bg-[#f7f4ef] text-stone-900 dark:bg-[#0c0a09] dark:text-stone-100">
@@ -90,23 +101,35 @@ export default function DashboardLayout({ children }: Props) {
             </Button>
           </div>
 
-          <nav className="flex-1 space-y-2 p-4">
-            {items.map((item) => (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-2 text-sm",
-                    isActive
-                      ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950"
-                      : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-900"
-                  )
-                }
-              >
-                <item.icon className="h-4 w-4 shrink-0" />
-                {!sidebarCollapsed ? <span>{item.label}</span> : null}
-              </NavLink>
+          <nav className="flex-1 space-y-5 overflow-y-auto p-4">
+            {sections.map((section) => (
+              <div key={section.heading || "main"} className="space-y-2">
+                {!sidebarCollapsed && section.heading ? (
+                  <p className="px-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-stone-400">
+                    {section.heading}
+                  </p>
+                ) : null}
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.label}
+                    to={item.to}
+                    end={item.end}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-3 rounded-xl px-3 py-2 text-sm",
+                        isActive
+                          ? user?.role === "HR"
+                            ? "bg-amber-100 font-medium text-stone-900 dark:bg-amber-400 dark:text-stone-950"
+                            : "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950"
+                          : "text-stone-600 hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-900"
+                      )
+                    }
+                  >
+                    <item.icon className="h-4 w-4 shrink-0" />
+                    {!sidebarCollapsed ? <span>{item.label}</span> : null}
+                  </NavLink>
+                ))}
+              </div>
             ))}
           </nav>
         </aside>
@@ -128,7 +151,7 @@ export default function DashboardLayout({ children }: Props) {
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                   <input
                     type="search"
-                    placeholder="Search..."
+                    placeholder="Search employees, cycle..."
                     className="h-10 w-full rounded-xl border border-stone-200 bg-stone-50 pl-10 pr-4 text-sm dark:border-stone-700 dark:bg-stone-950"
                     aria-label="Search"
                   />
