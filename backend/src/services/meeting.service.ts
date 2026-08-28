@@ -165,6 +165,8 @@ function serializeMeeting(meeting: MeetingRecord, viewerId: string, viewerRole: 
     bothConfirmed &&
     meeting.status !== MeetingStatus.CONFIRMED;
 
+  const canManage = meeting.createdById === viewerId && !completed;
+
   return {
     id: meeting.id,
     type: meeting.type,
@@ -244,6 +246,7 @@ function serializeMeeting(meeting: MeetingRecord, viewerId: string, viewerRole: 
       canAddNotes,
       canReviewReschedule,
       canHrConfirm,
+      canManage,
     },
   };
 }
@@ -468,20 +471,31 @@ export async function listPlanningMeetings(
     needsScheduling = Math.max(0, assignedCount - scheduledCount);
   }
 
-  const confirmationQueue = meetings
+  const confirmationQueueRows = await prisma.meeting.findMany({
+    where: {
+      type: MeetingType.PERFORMANCE_PLANNING,
+      status: { in: ACTIVE_MEETING_STATUSES },
+      ...(user.role === Role.EMPLOYEE ? { employeeId: user.id } : {}),
+      ...(user.role === Role.SUPERVISOR ? { supervisorId: user.id } : {}),
+      ...(cycle && user.role === Role.HR ? { cycleId: cycle.id } : {}),
+    },
+    include: meetingInclude,
+    orderBy: { scheduledAt: "asc" },
+    take: 12,
+  });
+  const confirmationQueue = confirmationQueueRows
     .filter(
       (item) =>
-        item.status !== MeetingStatus.COMPLETED &&
-        (item.status === MeetingStatus.RESCHEDULE_REQUESTED ||
-          item.participants.some((p) => p.response === MeetingParticipantResponse.PENDING) ||
-          (item.participants
-            .filter(
-              (p) =>
-                p.participantRole === MeetingParticipantRole.EMPLOYEE ||
-                p.participantRole === MeetingParticipantRole.SUPERVISOR
-            )
-            .every((p) => p.response === MeetingParticipantResponse.ACCEPTED) &&
-            item.status !== MeetingStatus.CONFIRMED))
+        item.status === MeetingStatus.RESCHEDULE_REQUESTED ||
+        item.participants.some((p) => p.response === MeetingParticipantResponse.PENDING) ||
+        (item.participants
+          .filter(
+            (p) =>
+              p.participantRole === MeetingParticipantRole.EMPLOYEE ||
+              p.participantRole === MeetingParticipantRole.SUPERVISOR
+          )
+          .every((p) => p.response === MeetingParticipantResponse.ACCEPTED) &&
+          item.status !== MeetingStatus.CONFIRMED)
     )
     .slice(0, 5);
 
@@ -1381,6 +1395,42 @@ export async function listTypedMeetings(
       : null,
     calendarDates: allForStats.map((item) => item.scheduledAt),
     cycle: cycle ? { id: cycle.id, name: cycle.name, status: cycle.status } : null,
+    confirmationQueue: (
+      await prisma.meeting.findMany({
+        where: {
+          type: { in: types },
+          status: { in: ACTIVE_MEETING_STATUSES },
+          ...(user.role === Role.EMPLOYEE ? { employeeId: user.id } : {}),
+          ...(user.role === Role.SUPERVISOR ? { supervisorId: user.id } : {}),
+          ...(cycle ? { cycleId: cycle.id } : {}),
+        },
+        include: meetingInclude,
+        orderBy: { scheduledAt: "asc" },
+        take: 8,
+      })
+    )
+      .filter(
+        (item) =>
+          item.status === MeetingStatus.RESCHEDULE_REQUESTED ||
+          item.participants.some((p) => p.response === MeetingParticipantResponse.PENDING)
+      )
+      .slice(0, 4)
+      .map((meeting) => serializeMeeting(meeting, user.id, user.role)),
+    nextSevenDays: (
+      await prisma.meeting.findMany({
+        where: {
+          type: { in: types },
+          status: { in: ACTIVE_MEETING_STATUSES },
+          scheduledAt: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) },
+          ...(user.role === Role.EMPLOYEE ? { employeeId: user.id } : {}),
+          ...(user.role === Role.SUPERVISOR ? { supervisorId: user.id } : {}),
+          ...(cycle ? { cycleId: cycle.id } : {}),
+        },
+        include: meetingInclude,
+        orderBy: { scheduledAt: "asc" },
+        take: 8,
+      })
+    ).map((meeting) => serializeMeeting(meeting, user.id, user.role)),
     page,
     pageSize,
     total,

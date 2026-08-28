@@ -26,6 +26,8 @@ import {
   seedDemoEmployeeScenarios,
   seedNeedsAssignmentJoiners,
 } from "./seed-appraisal-data.js";
+import { seedPdpWorkflow } from "./seed-pdp-workflow.js";
+import { seedEvaluationWorkflow } from "./seed-evaluation.js";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }),
@@ -487,7 +489,10 @@ async function resetCycleData() {
   await prisma.employeeCycleProgress.deleteMany();
   await prisma.appraisalReview.deleteMany();
   await prisma.appraisalOutcome.deleteMany();
+  await prisma.pdpActivity.deleteMany();
+  await prisma.pdpGoalComment.deleteMany();
   await prisma.pdpReviewComment.deleteMany();
+  await prisma.pdpEvidence.deleteMany();
   await prisma.pdpGoal.deleteMany();
   await prisma.personalDevelopmentPlan.deleteMany();
   await prisma.meetingActionItem.deleteMany();
@@ -758,6 +763,8 @@ async function seedAppraisalCycles(
     batches: active.batches,
   });
   await seedNeedsAssignmentJoiners(prisma, active.id);
+  await seedPdpWorkflow(prisma);
+  await seedEvaluationWorkflow(prisma);
 
   console.log("Appraisal cycle workforce assignments seeded.");
   console.log(

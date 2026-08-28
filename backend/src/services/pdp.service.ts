@@ -7,6 +7,7 @@
 import {
   MeetingStatus,
   NotificationType,
+  PdpActivityType,
   PdpEvidenceKind,
   PdpEvidenceStatus,
   PdpGoalStatus,
@@ -38,21 +39,33 @@ const SUPERVISOR_EDITABLE: PdpStatus[] = [
 ];
 
 function hrReviewLabel(pdp: { status: PdpStatus; hrReviewedAt: Date | null }) {
-  if (pdp.hrReviewedAt) return "Approved";
+  if (pdp.status === PdpStatus.ASSIGNED || pdp.status === PdpStatus.COMPLETED || pdp.hrReviewedAt) {
+    return "Approved";
+  }
   if (pdp.status === PdpStatus.CHANGES_REQUESTED_BY_HR) return "Changes Requested";
-  if (
-    pdp.status === PdpStatus.SUBMITTED ||
-    pdp.status === PdpStatus.PENDING_HR_REVIEW ||
-    pdp.status === PdpStatus.PENDING_HR_INTERVENTION
-  ) {
-    return "Waiting";
+  if (pdp.status === PdpStatus.PENDING_HR_REVIEW || pdp.status === PdpStatus.PENDING_HR_INTERVENTION) {
+    return "Pending";
   }
   return "Not Started";
 }
 
+function employeeReviewLabel(pdp: { status: PdpStatus; employeeAgreedAt: Date | null }) {
+  if (pdp.employeeAgreedAt) return "Approved";
+  if (pdp.status === PdpStatus.CHANGES_REQUESTED_BY_EMPLOYEE) return "Changes Requested";
+  if (
+    pdp.status === PdpStatus.PENDING_EMPLOYEE_REVIEW ||
+    pdp.status === PdpStatus.PENDING_EMPLOYEE_REREVIEW ||
+    pdp.status === PdpStatus.SUBMITTED
+  ) {
+    return "Pending";
+  }
+  return "Not Submitted";
+}
+
 function pdpBucket(pdp: { status: PdpStatus; employeeAgreedAt: Date | null; hrReviewedAt: Date | null }) {
-  if (pdp.status === PdpStatus.DRAFT) return "draft";
+  if (pdp.status === PdpStatus.DRAFT || pdp.status === PdpStatus.UNDER_SUPERVISOR_REVISION) return "draft";
   if (pdp.status === PdpStatus.COMPLETED) return "completed";
+  if (pdp.status === PdpStatus.CHANGES_REQUESTED_BY_HR) return "hr_changes";
   if (
     pdp.status === PdpStatus.APPROVED ||
     pdp.status === PdpStatus.ASSIGNED ||
@@ -61,12 +74,15 @@ function pdpBucket(pdp: { status: PdpStatus; employeeAgreedAt: Date | null; hrRe
     return "approved";
   }
   if (
-    pdp.status === PdpStatus.CHANGES_REQUESTED ||
+    pdp.status === PdpStatus.PENDING_EMPLOYEE_REVIEW ||
+    pdp.status === PdpStatus.PENDING_EMPLOYEE_REREVIEW ||
     pdp.status === PdpStatus.CHANGES_REQUESTED_BY_EMPLOYEE ||
-    pdp.status === PdpStatus.CHANGES_REQUESTED_BY_HR ||
-    pdp.status === PdpStatus.UNDER_SUPERVISOR_REVISION
+    (pdp.status === PdpStatus.SUBMITTED && !pdp.employeeAgreedAt)
   ) {
-    return "changes_requested";
+    return "waiting_employee";
+  }
+  if (pdp.status === PdpStatus.PENDING_HR_REVIEW || pdp.status === PdpStatus.PENDING_HR_INTERVENTION) {
+    return "waiting_hr";
   }
   if (!pdp.employeeAgreedAt) return "waiting_employee";
   if (!pdp.hrReviewedAt) return "waiting_hr";
@@ -80,33 +96,57 @@ function progressPercent(goals: Array<{ progress: number }>) {
 
 function displayStatus(pdp: {
   status: PdpStatus;
-  employeeAgreedAt: Date | null;
-  hrReviewedAt: Date | null;
 }) {
-  if (pdp.status === PdpStatus.SUBMITTED || pdp.status === PdpStatus.PENDING_EMPLOYEE_REVIEW || pdp.status === PdpStatus.PENDING_HR_REVIEW) {
-    const waiting = [];
-    if (!pdp.employeeAgreedAt) waiting.push("Waiting for Employee Evaluation");
-    if (!pdp.hrReviewedAt) waiting.push("Waiting for HR Evaluation");
-    return waiting.join(" · ") || "Submitted";
-  }
   const labels: Record<PdpStatus, string> = {
     DRAFT: "Draft",
-    SUBMITTED: "Submitted",
+    SUBMITTED: "Waiting for Employee Approval",
     APPROVED: "Approved",
     REJECTED: "Rejected",
-    PENDING_HR_REVIEW: "Waiting for HR Evaluation",
-    PENDING_EMPLOYEE_REVIEW: "Waiting for Employee Evaluation",
-    CHANGES_REQUESTED: "Update Required",
-    UNDER_SUPERVISOR_REVISION: "Update Required",
-    PENDING_EMPLOYEE_REREVIEW: "Waiting for Employee Evaluation",
-    PENDING_HR_INTERVENTION: "Redirected to HR",
+    PENDING_HR_REVIEW: "Waiting for HR Approval",
+    PENDING_EMPLOYEE_REVIEW: "Waiting for Employee Approval",
+    CHANGES_REQUESTED: "Changes Requested",
+    UNDER_SUPERVISOR_REVISION: "Changes Requested",
+    PENDING_EMPLOYEE_REREVIEW: "Waiting for Employee Approval",
+    PENDING_HR_INTERVENTION: "Waiting for HR Approval",
     CHANGES_REQUESTED_BY_HR: "HR Changes Requested",
-    CHANGES_REQUESTED_BY_EMPLOYEE: "Employee Changes Requested",
-    READY_FOR_ASSIGNMENT: "Ready for Assignment",
+    CHANGES_REQUESTED_BY_EMPLOYEE: "Changes Requested",
+    READY_FOR_ASSIGNMENT: "Approved",
     ASSIGNED: "Assigned",
     COMPLETED: "Completed",
   };
   return labels[pdp.status] ?? pdp.status;
+}
+
+function timelineFor(pdp: {
+  status: PdpStatus;
+  employeeAgreedAt: Date | null;
+  hrReviewedAt: Date | null;
+  assignedAt: Date | null;
+}) {
+  const stages = [
+    { id: "draft", label: "PDP being created" },
+    { id: "employee", label: "Waiting for employee approval" },
+    { id: "employee_approved", label: "Employee approved" },
+    { id: "hr", label: "Waiting for HR approval" },
+    { id: "hr_approved", label: "HR approved" },
+    { id: "assigned", label: "PDP assigned / Active" },
+  ] as const;
+  let current = 0;
+  if (pdp.status === PdpStatus.ASSIGNED || pdp.status === PdpStatus.COMPLETED || pdp.assignedAt) current = 5;
+  else if (pdp.status === PdpStatus.READY_FOR_ASSIGNMENT || Boolean(pdp.hrReviewedAt)) current = 4;
+  else if (pdp.status === PdpStatus.PENDING_HR_REVIEW || pdp.status === PdpStatus.CHANGES_REQUESTED_BY_HR) current = 3;
+  else if (pdp.employeeAgreedAt) current = 2;
+  else if (
+    pdp.status === PdpStatus.PENDING_EMPLOYEE_REVIEW ||
+    pdp.status === PdpStatus.SUBMITTED ||
+    pdp.status === PdpStatus.CHANGES_REQUESTED_BY_EMPLOYEE
+  ) {
+    current = 1;
+  }
+  return stages.map((stage, index) => ({
+    ...stage,
+    state: index < current ? "done" : index === current ? "current" : "upcoming",
+  }));
 }
 
 const pdpInclude = {
@@ -136,9 +176,34 @@ const pdpInclude = {
       Employee: { select: { id: true, employeeId: true, name: true, role: true } },
     },
   },
+  goalComments: {
+    orderBy: { createdAt: "desc" as const },
+    include: {
+      author: { select: { id: true, employeeId: true, name: true, role: true } },
+    },
+  },
+  activities: {
+    orderBy: { createdAt: "desc" as const },
+    take: 20,
+    include: {
+      actor: { select: { id: true, employeeId: true, name: true } },
+      goal: { select: { id: true, title: true } },
+    },
+  },
   Meeting_PersonalDevelopmentPlan_disagreementMeetingIdToMeeting: {
     select: { id: true, title: true, status: true, scheduledAt: true, location: true },
   },
+} as const;
+
+const pdpListInclude = {
+  employee: pdpInclude.employee,
+  supervisor: pdpInclude.supervisor,
+  cycle: pdpInclude.cycle,
+  batch: pdpInclude.batch,
+  goals: { select: { id: true, progress: true, status: true, title: true, objective: true, expectedOutcome: true, developmentArea: true, measurementKpi: true, successCriteria: true, notes: true, category: true, priority: true, weightage: true, dueDate: true, startDate: true, progressComments: true, sortOrder: true }, orderBy: { sortOrder: "asc" as const } },
+  evidence: pdpInclude.evidence,
+  PdpReviewComment: pdpInclude.PdpReviewComment,
+  Meeting_PersonalDevelopmentPlan_disagreementMeetingIdToMeeting: pdpInclude.Meeting_PersonalDevelopmentPlan_disagreementMeetingIdToMeeting,
 } as const;
 
 function serializePdp(
@@ -207,6 +272,22 @@ function serializePdp(
       createdAt: Date;
       Employee: { id: string; employeeId: string; name: string; role: string };
     }>;
+    goalComments?: Array<{
+      id: string;
+      goalId: string;
+      message: string;
+      createdAt: Date;
+      author: { id: string; employeeId: string; name: string; role: string };
+    }>;
+    activities?: Array<{
+      id: string;
+      type: string;
+      message: string;
+      createdAt: Date;
+      goalId: string | null;
+      actor: { id: string; employeeId: string; name: string } | null;
+      goal: { id: string; title: string } | null;
+    }>;
     Meeting_PersonalDevelopmentPlan_disagreementMeetingIdToMeeting: {
       id: string;
       title: string;
@@ -234,10 +315,9 @@ function serializePdp(
       pdp.status === PdpStatus.PENDING_EMPLOYEE_REREVIEW);
   const canHrReview =
     viewerRole === Role.HR &&
+    Boolean(pdp.employeeAgreedAt) &&
     !pdp.hrReviewedAt &&
-    (pdp.status === PdpStatus.SUBMITTED ||
-      pdp.status === PdpStatus.PENDING_HR_REVIEW ||
-      pdp.status === PdpStatus.PENDING_HR_INTERVENTION);
+    (pdp.status === PdpStatus.PENDING_HR_REVIEW || pdp.status === PdpStatus.PENDING_HR_INTERVENTION);
   const canRedirect =
     viewerRole === Role.SUPERVISOR &&
     pdp.status === PdpStatus.CHANGES_REQUESTED_BY_EMPLOYEE;
@@ -274,6 +354,7 @@ function serializePdp(
     employeeChangeRequest: pdp.employeeChangeRequest,
     hrChangeRequest: pdp.hrChangeRequest,
     redirectedReason: pdp.redirectedReason,
+    employeeApprovalStatus: employeeReviewLabel(pdp),
     disagreementMeeting: pdp.Meeting_PersonalDevelopmentPlan_disagreementMeetingIdToMeeting,
     goals: pdp.goals,
     evidence: (pdp.evidence ?? []).map((item) => ({
@@ -295,6 +376,23 @@ function serializePdp(
       createdAt: item.createdAt,
       author: item.Employee,
     })),
+    goalComments: (pdp.goalComments ?? []).map((item) => ({
+      id: item.id,
+      goalId: item.goalId,
+      message: item.message,
+      createdAt: item.createdAt,
+      author: item.author,
+    })),
+    activities: (pdp.activities ?? []).map((item) => ({
+      id: item.id,
+      type: item.type,
+      message: item.message,
+      createdAt: item.createdAt,
+      goalId: item.goalId,
+      goalTitle: item.goal?.title ?? null,
+      actor: item.actor,
+    })),
+    timeline: timelineFor(pdp),
     createdAt: pdp.createdAt,
     updatedAt: pdp.updatedAt,
     actions: {
@@ -340,6 +438,75 @@ async function loadPdp(pdpId: string) {
   });
   if (!pdp) throw new AppError("PDP not found", 404);
   return pdp;
+}
+
+async function logActivity(params: {
+  pdpId: string;
+  actorId?: string | null;
+  goalId?: string | null;
+  type: PdpActivityType;
+  message: string;
+}) {
+  await prisma.pdpActivity.create({
+    data: {
+      pdpId: params.pdpId,
+      actorId: params.actorId ?? null,
+      goalId: params.goalId ?? null,
+      type: params.type,
+      message: params.message,
+    },
+  });
+}
+
+async function loadDashboardExtras(pdp: { id: string; employeeId: string; cycleId: string }, userId: string) {
+  const [followUps, notifications] = await Promise.all([
+    prisma.meeting.findMany({
+      where: {
+        employeeId: pdp.employeeId,
+        cycleId: pdp.cycleId,
+        type: "FOLLOW_UP",
+      },
+      orderBy: { scheduledAt: "asc" },
+      take: 6,
+      select: {
+        id: true,
+        title: true,
+        scheduledAt: true,
+        endAt: true,
+        status: true,
+        type: true,
+      },
+    }),
+    prisma.notification.findMany({
+      where: {
+        recipientId: userId,
+        type: {
+          in: [
+            NotificationType.PDP_APPROVED,
+            NotificationType.PDP_SUBMITTED,
+            NotificationType.PDP_HR_FEEDBACK,
+            NotificationType.PDP_EMPLOYEE_RESPONSE,
+            NotificationType.PDP_CHANGES_REQUESTED,
+            NotificationType.PDP_INTERVENTION_REQUIRED,
+            NotificationType.PDP_ASSIGNED,
+            NotificationType.PDP_REDIRECTED,
+            NotificationType.FOLLOW_UP_SCHEDULED,
+          ],
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        message: true,
+        createdAt: true,
+        status: true,
+      },
+    }),
+  ]);
+  return { followUpMeetings: followUps, notifications };
 }
 
 function assertCanView(
@@ -409,16 +576,21 @@ export async function listPdps(userId: string, query: PdpListQuery = {}) {
     where.status = {
       in: [PdpStatus.APPROVED, PdpStatus.ASSIGNED, PdpStatus.READY_FOR_ASSIGNMENT],
     };
-  } else if (query.status === "waiting_employee") {
-    where.employeeAgreedAt = null;
+  }   else if (query.status === "waiting_employee") {
     where.status = {
-      in: [PdpStatus.SUBMITTED, PdpStatus.PENDING_EMPLOYEE_REVIEW, PdpStatus.PENDING_EMPLOYEE_REREVIEW],
+      in: [
+        PdpStatus.SUBMITTED,
+        PdpStatus.PENDING_EMPLOYEE_REVIEW,
+        PdpStatus.PENDING_EMPLOYEE_REREVIEW,
+        PdpStatus.CHANGES_REQUESTED_BY_EMPLOYEE,
+      ],
     };
   } else if (query.status === "waiting_hr") {
-    where.hrReviewedAt = null;
     where.status = {
-      in: [PdpStatus.SUBMITTED, PdpStatus.PENDING_HR_REVIEW, PdpStatus.PENDING_HR_INTERVENTION],
+      in: [PdpStatus.PENDING_HR_REVIEW, PdpStatus.PENDING_HR_INTERVENTION],
     };
+  } else if (query.status === "hr_changes") {
+    where.status = PdpStatus.CHANGES_REQUESTED_BY_HR;
   } else if (query.status && query.status !== "all") {
     where.status = query.status as PdpStatus;
   }
@@ -427,7 +599,7 @@ export async function listPdps(userId: string, query: PdpListQuery = {}) {
     prisma.personalDevelopmentPlan.count({ where }),
     prisma.personalDevelopmentPlan.findMany({
       where,
-      include: pdpInclude,
+      include: pdpListInclude,
       orderBy: { updatedAt: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -446,6 +618,7 @@ export async function listPdps(userId: string, query: PdpListQuery = {}) {
     approved: 0,
     completed: 0,
     changesRequested: 0,
+    hrChanges: 0,
   };
   for (const row of statsRows) {
     const bucket = pdpBucket(row);
@@ -454,7 +627,10 @@ export async function listPdps(userId: string, query: PdpListQuery = {}) {
     else if (bucket === "waiting_hr") stats.waitingHr += 1;
     else if (bucket === "approved") stats.approved += 1;
     else if (bucket === "completed") stats.completed += 1;
-    else if (bucket === "changes_requested") stats.changesRequested += 1;
+    else if (bucket === "hr_changes") {
+      stats.hrChanges += 1;
+      stats.changesRequested += 1;
+    } else if (bucket === "changes_requested") stats.changesRequested += 1;
   }
 
   let team: Array<{
@@ -490,7 +666,7 @@ export async function listPdps(userId: string, query: PdpListQuery = {}) {
       extraIds.length > 0
         ? await prisma.personalDevelopmentPlan.findMany({
             where: { cycleId: cycle.id, employeeId: { in: extraIds } },
-            include: pdpInclude,
+            include: pdpListInclude,
           })
         : [];
     for (const pdp of extraPdps) byEmployee.set(pdp.employeeId, pdp);
@@ -518,7 +694,7 @@ export async function getPdp(userId: string, pdpId: string) {
   const user = await requireUser(userId);
   const pdp = await loadPdp(pdpId);
   assertCanView(pdp, user);
-  return serializePdp(pdp, user.role);
+  return { ...serializePdp(pdp, user.role), ...(await loadDashboardExtras(pdp, user.id)) };
 }
 
 export async function getMyPdp(userId: string) {
@@ -531,8 +707,10 @@ export async function getMyPdp(userId: string) {
     include: pdpInclude,
   });
   return {
-    cycle: { id: cycle.id, name: cycle.name, status: cycle.status },
-    pdp: pdp ? serializePdp(pdp, user.role) : null,
+    cycle: { id: cycle.id, name: cycle.name, status: cycle.status, startDate: cycle.startDate, endDate: cycle.endDate },
+    pdp: pdp
+      ? { ...serializePdp(pdp, user.role), ...(await loadDashboardExtras(pdp, user.id)) }
+      : null,
   };
 }
 
@@ -594,7 +772,24 @@ export async function createPdp(userId: string, input: CreatePdpInput) {
     include: pdpInclude,
   });
 
-  return serializePdp(created, user.role);
+  await logActivity({
+    pdpId: created.id,
+    actorId: user.id,
+    type: PdpActivityType.PDP_CREATED,
+    message: `${user.name} started a PDP draft for ${created.employee.name}.`,
+  });
+  await prisma.employeeCycleProgress.upsert({
+    where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: input.employeeId } },
+    create: {
+      employeeId: input.employeeId,
+      cycleId: cycle.id,
+      batchId: assignment.batchId,
+      currentStage: "PDP_CREATION",
+      pdpCreatedAt: new Date(),
+    },
+    update: { pdpCreatedAt: new Date(), currentStage: "PDP_CREATION" },
+  });
+  return serializePdp(await loadPdp(created.id), user.role);
 }
 
 export async function savePdpDraft(userId: string, pdpId: string, input: SavePdpDraftInput) {
@@ -610,13 +805,15 @@ export async function savePdpDraft(userId: string, pdpId: string, input: SavePdp
     where: { id: pdpId },
     data: {
       summary: input.summary ?? pdp.summary,
-      status:
-        pdp.status === PdpStatus.DRAFT
-          ? PdpStatus.DRAFT
-          : PdpStatus.UNDER_SUPERVISOR_REVISION,
     },
   });
   await replaceGoals(pdpId, input.goals);
+  await logActivity({
+    pdpId,
+    actorId: user.id,
+    type: PdpActivityType.GOAL_UPDATED,
+    message: `${user.name} updated PDP goals (${input.goals.length} / ${MIN_PDP_GOALS}).`,
+  });
   const updated = await loadPdp(pdpId);
   return serializePdp(updated, user.role);
 }
@@ -633,33 +830,48 @@ export async function submitPdp(userId: string, pdpId: string) {
     throw new AppError("This PDP cannot be submitted in its current status", 400);
   }
 
+  const resubmitAfterHr =
+    pdp.status === PdpStatus.CHANGES_REQUESTED_BY_HR && Boolean(pdp.employeeAgreedAt);
+  const nextStatus = resubmitAfterHr ? PdpStatus.PENDING_HR_REVIEW : PdpStatus.PENDING_EMPLOYEE_REVIEW;
+
   const updated = await prisma.personalDevelopmentPlan.update({
     where: { id: pdpId },
     data: {
-      status: PdpStatus.SUBMITTED,
-      employeeAgreedAt: null,
+      status: nextStatus,
+      employeeAgreedAt: resubmitAfterHr ? pdp.employeeAgreedAt : null,
       hrReviewedAt: null,
+      employeeChangeRequest: resubmitAfterHr ? pdp.employeeChangeRequest : null,
     },
     include: pdpInclude,
   });
 
-  await Promise.all([
-    createNotification({
+  await logActivity({
+    pdpId,
+    actorId: user.id,
+    type: PdpActivityType.PDP_SUBMITTED,
+    message: resubmitAfterHr
+      ? `${user.name} resubmitted the PDP for HR approval.`
+      : `${user.name} submitted the PDP for employee approval.`,
+  });
+
+  if (resubmitAfterHr) {
+    await notifyAllHrUsers({
       type: NotificationType.PDP_SUBMITTED,
-      title: "PDP submitted for review",
-      message: `${user.name} submitted a PDP for ${pdp.employee.name}. Please review the goals and approve or request changes.`,
+      title: "Revised PDP ready for HR review",
+      message: `${user.name} resubmitted the PDP for ${pdp.employee.name} after HR requested changes.`,
+      subjectEmployeeId: pdp.employeeId,
+      metadata: { pdpId },
+    });
+  } else {
+    await createNotification({
+      type: NotificationType.PDP_SUBMITTED,
+      title: "PDP submitted for your approval",
+      message: `${user.name} submitted your Personal Development Plan. Please review it and approve or request changes.`,
       recipientId: pdp.employeeId,
       subjectEmployeeId: pdp.employeeId,
       metadata: { pdpId },
-    }),
-    notifyAllHrUsers({
-      type: NotificationType.PDP_SUBMITTED,
-      title: "PDP submitted for review",
-      message: `${user.name} submitted a PDP for ${pdp.employee.name}. Please review it in PDP Management.`,
-      subjectEmployeeId: pdp.employeeId,
-      metadata: { pdpId },
-    }),
-  ]);
+    });
+  }
 
   await prisma.employeeCycleProgress.upsert({
     where: { cycleId_employeeId: { cycleId: pdp.cycleId, employeeId: pdp.employeeId } },
@@ -677,16 +889,85 @@ export async function submitPdp(userId: string, pdpId: string) {
   return serializePdp(updated, user.role);
 }
 
-async function maybeMarkReady(pdpId: string) {
-  const pdp = await prisma.personalDevelopmentPlan.findUnique({ where: { id: pdpId } });
-  if (!pdp?.employeeAgreedAt || !pdp.hrReviewedAt) return pdp;
-  return prisma.personalDevelopmentPlan.update({
+async function completeAssignment(pdpId: string, actorId: string) {
+  const pdp = await loadPdp(pdpId);
+  if (!pdp.employeeAgreedAt || !pdp.hrReviewedAt) {
+    throw new AppError("Both the employee and HR must approve before the PDP can be assigned", 400);
+  }
+  const updated = await prisma.personalDevelopmentPlan.update({
     where: { id: pdpId },
     data: {
-      status: PdpStatus.READY_FOR_ASSIGNMENT,
-      approvedAt: new Date(),
+      status: PdpStatus.ASSIGNED,
+      assignedAt: new Date(),
+      approvedAt: pdp.approvedAt ?? new Date(),
+      approvedById: actorId,
     },
   });
+  await prisma.employeeCycleProgress.upsert({
+    where: { cycleId_employeeId: { cycleId: pdp.cycleId, employeeId: pdp.employeeId } },
+    create: {
+      employeeId: pdp.employeeId,
+      cycleId: pdp.cycleId,
+      batchId: pdp.batchId,
+      currentStage: "PDP_APPROVED",
+      pdpApprovedAt: new Date(),
+    },
+    update: {
+      currentStage: "PDP_APPROVED",
+      pdpApprovedAt: new Date(),
+    },
+  });
+  await logActivity({
+    pdpId,
+    actorId,
+    type: PdpActivityType.PDP_ASSIGNED,
+    message: `PDP assigned to ${pdp.employee.name}.`,
+  });
+  await Promise.all([
+    createNotification({
+      type: NotificationType.PDP_ASSIGNED,
+      title: "PDP assigned",
+      message: `Your Personal Development Plan for ${pdp.cycle.name} is now assigned. Open My PDP and view your PDP Dashboard.`,
+      recipientId: pdp.employeeId,
+      subjectEmployeeId: pdp.employeeId,
+      metadata: { pdpId },
+    }),
+    ...(pdp.supervisorId
+      ? [
+          createNotification({
+            type: NotificationType.PDP_ASSIGNED,
+            title: "PDP assigned",
+            message: `The PDP for ${pdp.employee.name} is now assigned and active.`,
+            recipientId: pdp.supervisorId,
+            subjectEmployeeId: pdp.employeeId,
+            metadata: { pdpId },
+          }),
+        ]
+      : []),
+    notifyAllHrUsers({
+      type: NotificationType.PDP_ASSIGNED,
+      title: "PDP assigned",
+      message: `The PDP for ${pdp.employee.name} has been assigned.`,
+      subjectEmployeeId: pdp.employeeId,
+      metadata: { pdpId },
+    }),
+  ]);
+  if (pdp.supervisorId) {
+    await ensureFollowUpMeetingsForEmployee({
+      employeeId: pdp.employeeId,
+      supervisorId: pdp.supervisorId,
+      createdById: actorId,
+      cycleId: pdp.cycleId,
+      batchId: pdp.batchId,
+      startDate: updated.assignedAt ?? new Date(),
+    });
+    await logActivity({
+      pdpId,
+      actorId,
+      type: PdpActivityType.FOLLOW_UP_SCHEDULED,
+      message: `Follow-up meetings were scheduled for ${pdp.employee.name}.`,
+    });
+  }
 }
 
 export async function employeeReviewPdp(
@@ -700,6 +981,13 @@ export async function employeeReviewPdp(
   if (user.role !== Role.EMPLOYEE || pdp.employeeId !== user.id) {
     throw new AppError("You can only review your own PDP", 403);
   }
+  if (
+    pdp.status !== PdpStatus.SUBMITTED &&
+    pdp.status !== PdpStatus.PENDING_EMPLOYEE_REVIEW &&
+    pdp.status !== PdpStatus.PENDING_EMPLOYEE_REREVIEW
+  ) {
+    throw new AppError("This PDP is not waiting for your approval", 400);
+  }
   if (pdp.employeeAgreedAt) throw new AppError("You have already approved this PDP", 400);
 
   if (decision === "APPROVE") {
@@ -708,7 +996,7 @@ export async function employeeReviewPdp(
       data: {
         employeeAgreedAt: new Date(),
         employeeChangeRequest: null,
-        status: pdp.hrReviewedAt ? PdpStatus.READY_FOR_ASSIGNMENT : PdpStatus.SUBMITTED,
+        status: PdpStatus.PENDING_HR_REVIEW,
       },
     });
     await prisma.pdpReviewComment.create({
@@ -719,17 +1007,31 @@ export async function employeeReviewPdp(
         message: message?.trim() || "Employee approved the PDP.",
       },
     });
-    await maybeMarkReady(pdpId);
-    if (pdp.supervisorId) {
-      await createNotification({
-        type: NotificationType.PDP_EMPLOYEE_RESPONSE,
-        title: "Employee approved the PDP",
-        message: `${pdp.employee.name} approved their PDP.`,
-        recipientId: pdp.supervisorId,
+    await logActivity({
+      pdpId,
+      actorId: user.id,
+      type: PdpActivityType.EMPLOYEE_APPROVED,
+      message: `${pdp.employee.name} approved the PDP.`,
+    });
+    await Promise.all([
+      pdp.supervisorId
+        ? createNotification({
+            type: NotificationType.PDP_EMPLOYEE_RESPONSE,
+            title: "Employee approved the PDP",
+            message: `${pdp.employee.name} approved their PDP. It is now waiting for HR approval.`,
+            recipientId: pdp.supervisorId,
+            subjectEmployeeId: pdp.employeeId,
+            metadata: { pdpId },
+          })
+        : Promise.resolve(),
+      notifyAllHrUsers({
+        type: NotificationType.PDP_SUBMITTED,
+        title: "PDP waiting for HR approval",
+        message: `${pdp.employee.name} approved their PDP. Please review it in PDP Management.`,
         subjectEmployeeId: pdp.employeeId,
         metadata: { pdpId },
-      });
-    }
+      }),
+    ]);
   } else {
     if (!message || message.trim().length < 8) {
       throw new AppError("Describe the changes you are requesting", 400);
@@ -749,6 +1051,12 @@ export async function employeeReviewPdp(
         kind: PdpReviewKind.EMPLOYEE_CHANGE_REQUEST,
         message: message.trim(),
       },
+    });
+    await logActivity({
+      pdpId,
+      actorId: user.id,
+      type: PdpActivityType.EMPLOYEE_CHANGES_REQUESTED,
+      message: `${pdp.employee.name} requested changes: ${message.trim()}`,
     });
     if (pdp.supervisorId) {
       await createNotification({
@@ -776,13 +1084,21 @@ export async function hrReviewPdp(
   const pdp = await loadPdp(pdpId);
 
   if (decision === "APPROVE") {
+    if (!pdp.employeeAgreedAt) {
+      throw new AppError("HR can review this PDP after the employee has approved it", 400);
+    }
+    if (pdp.status !== PdpStatus.PENDING_HR_REVIEW && pdp.status !== PdpStatus.PENDING_HR_INTERVENTION) {
+      throw new AppError("This PDP is not waiting for HR approval", 400);
+    }
     await prisma.personalDevelopmentPlan.update({
       where: { id: pdpId },
       data: {
         hrReviewedAt: new Date(),
         hrChangeRequest: null,
         redirectedReason: null,
-        status: pdp.employeeAgreedAt ? PdpStatus.READY_FOR_ASSIGNMENT : PdpStatus.SUBMITTED,
+        status: PdpStatus.READY_FOR_ASSIGNMENT,
+        approvedAt: new Date(),
+        approvedById: user.id,
       },
     });
     await prisma.pdpReviewComment.create({
@@ -793,18 +1109,27 @@ export async function hrReviewPdp(
         message: message?.trim() || "HR approved the PDP.",
       },
     });
-    await maybeMarkReady(pdpId);
+    await logActivity({
+      pdpId,
+      actorId: user.id,
+      type: PdpActivityType.HR_APPROVED,
+      message: `HR approved the PDP for ${pdp.employee.name}.`,
+    });
+    await completeAssignment(pdpId, user.id);
     if (pdp.supervisorId) {
       await createNotification({
         type: NotificationType.PDP_HR_FEEDBACK,
         title: "HR approved the PDP",
-        message: `HR approved the PDP for ${pdp.employee.name}.`,
+        message: `HR approved and assigned the PDP for ${pdp.employee.name}.`,
         recipientId: pdp.supervisorId,
         subjectEmployeeId: pdp.employeeId,
         metadata: { pdpId },
       });
     }
   } else {
+    if (pdp.status !== PdpStatus.PENDING_HR_REVIEW && pdp.status !== PdpStatus.PENDING_HR_INTERVENTION) {
+      throw new AppError("This PDP is not waiting for HR approval", 400);
+    }
     if (!message || message.trim().length < 8) {
       throw new AppError("Describe the changes HR is requesting", 400);
     }
@@ -823,6 +1148,20 @@ export async function hrReviewPdp(
         kind: PdpReviewKind.HR_CHANGE_REQUEST,
         message: message.trim(),
       },
+    });
+    await logActivity({
+      pdpId,
+      actorId: user.id,
+      type: PdpActivityType.HR_CHANGES_REQUESTED,
+      message: `HR requested changes: ${message.trim()}`,
+    });
+    await createNotification({
+      type: NotificationType.PDP_CHANGES_REQUESTED,
+      title: "HR requested PDP changes",
+      message: `HR requested changes to your PDP: ${message.trim()}`,
+      recipientId: pdp.employeeId,
+      subjectEmployeeId: pdp.employeeId,
+      metadata: { pdpId },
     });
     if (pdp.supervisorId) {
       await createNotification({
@@ -893,69 +1232,18 @@ export async function redirectPdpToHr(userId: string, pdpId: string, reason: str
 
 export async function assignPdp(userId: string, pdpId: string) {
   const user = await requireUser(userId);
-  if (user.role !== Role.SUPERVISOR) throw new AppError("Only the supervisor can assign a PDP", 403);
+  if (user.role !== Role.SUPERVISOR && user.role !== Role.HR) {
+    throw new AppError("Only the supervisor or HR can assign a PDP", 403);
+  }
   const pdp = await loadPdp(pdpId);
-  if (pdp.supervisorId !== user.id) throw new AppError("You can only assign PDPs for your team", 403);
-  if (!pdp.employeeAgreedAt || !pdp.hrReviewedAt) {
-    throw new AppError("Both the employee and HR must approve before the PDP can be assigned", 400);
+  if (user.role === Role.SUPERVISOR && pdp.supervisorId !== user.id) {
+    throw new AppError("You can only assign PDPs for your team", 403);
   }
-
-  const updated = await prisma.personalDevelopmentPlan.update({
-    where: { id: pdpId },
-    data: {
-      status: PdpStatus.ASSIGNED,
-      assignedAt: new Date(),
-      approvedAt: pdp.approvedAt ?? new Date(),
-      approvedById: user.id,
-    },
-    include: pdpInclude,
-  });
-
-  await prisma.employeeCycleProgress.upsert({
-    where: { cycleId_employeeId: { cycleId: pdp.cycleId, employeeId: pdp.employeeId } },
-    create: {
-      employeeId: pdp.employeeId,
-      cycleId: pdp.cycleId,
-      batchId: pdp.batchId,
-      currentStage: "PDP_APPROVED",
-      pdpApprovedAt: new Date(),
-    },
-    update: {
-      currentStage: "PDP_APPROVED",
-      pdpApprovedAt: new Date(),
-    },
-  });
-
-  await Promise.all([
-    createNotification({
-      type: NotificationType.PDP_ASSIGNED,
-      title: "PDP assigned",
-      message: `Your PDP for ${pdp.cycle.name} has been assigned.`,
-      recipientId: pdp.employeeId,
-      subjectEmployeeId: pdp.employeeId,
-      metadata: { pdpId },
-    }),
-    notifyAllHrUsers({
-      type: NotificationType.PDP_ASSIGNED,
-      title: "PDP assigned",
-      message: `The PDP for ${pdp.employee.name} has been assigned.`,
-      subjectEmployeeId: pdp.employeeId,
-      metadata: { pdpId },
-    }),
-  ]);
-
-  if (pdp.supervisorId) {
-    await ensureFollowUpMeetingsForEmployee({
-      employeeId: pdp.employeeId,
-      supervisorId: pdp.supervisorId,
-      createdById: user.id,
-      cycleId: pdp.cycleId,
-      batchId: pdp.batchId,
-      startDate: updated.assignedAt ?? new Date(),
-    });
+  if (pdp.status === PdpStatus.ASSIGNED || pdp.status === PdpStatus.COMPLETED) {
+    return serializePdp(pdp, user.role);
   }
-
-  return serializePdp(updated, user.role);
+  await completeAssignment(pdpId, user.id);
+  return serializePdp(await loadPdp(pdpId), user.role);
 }
 
 export async function updateGoalProgress(
@@ -992,6 +1280,23 @@ export async function updateGoalProgress(
       status: nextStatus,
     },
   });
+  await logActivity({
+    pdpId,
+    actorId: user.id,
+    goalId,
+    type: PdpActivityType.PROGRESS_UPDATED,
+    message: `Progress updated for '${goal.title}' to ${input.progress}%.`,
+  });
+  if (pdp.supervisorId) {
+    await createNotification({
+      type: NotificationType.PDP_EMPLOYEE_RESPONSE,
+      title: "PDP progress updated",
+      message: `${pdp.employee.name} updated progress on "${goal.title}" to ${input.progress}%.`,
+      recipientId: pdp.supervisorId,
+      subjectEmployeeId: pdp.employeeId,
+      metadata: { pdpId, goalId },
+    });
+  }
   return serializePdp(await loadPdp(pdpId), user.role);
 }
 
@@ -1024,6 +1329,15 @@ export async function addPdpEvidence(
       kind: (kind as PdpEvidenceKind) || PdpEvidenceKind.SUPPORTING,
       status: PdpEvidenceStatus.SUBMITTED,
     },
+  });
+
+  const goalTitle = pdp.goals.find((item) => item.id === goalId)?.title ?? "a goal";
+  await logActivity({
+    pdpId,
+    actorId: user.id,
+    goalId,
+    type: PdpActivityType.EVIDENCE_UPLOADED,
+    message: `Evidence uploaded for '${goalTitle}'.`,
   });
 
   if (pdp.supervisorId) {
@@ -1076,4 +1390,39 @@ export async function reviewPdpEvidence(userId: string, evidenceId: string) {
     data: { status: PdpEvidenceStatus.REVIEWED },
   });
   return serializePdp(await loadPdp(evidence.pdpId), user.role);
+}
+
+export async function addGoalComment(userId: string, pdpId: string, goalId: string, message: string) {
+  const user = await requireUser(userId);
+  const pdp = await loadPdp(pdpId);
+  assertCanView(pdp, user);
+  if (user.role !== Role.EMPLOYEE || pdp.employeeId !== user.id) {
+    throw new AppError("Only the employee can comment on their goals", 403);
+  }
+  if (pdp.status !== PdpStatus.ASSIGNED && pdp.status !== PdpStatus.COMPLETED) {
+    throw new AppError("Comments can be added after the PDP is assigned", 400);
+  }
+  const goal = pdp.goals.find((item) => item.id === goalId);
+  if (!goal) throw new AppError("Goal not found", 404);
+  await prisma.pdpGoalComment.create({
+    data: { pdpId, goalId, authorId: user.id, message: message.trim() },
+  });
+  await logActivity({
+    pdpId,
+    actorId: user.id,
+    goalId,
+    type: PdpActivityType.COMMENT_ADDED,
+    message: `New comment on '${goal.title}'.`,
+  });
+  if (pdp.supervisorId) {
+    await createNotification({
+      type: NotificationType.PDP_EMPLOYEE_RESPONSE,
+      title: "New PDP goal comment",
+      message: `${pdp.employee.name} commented on "${goal.title}".`,
+      recipientId: pdp.supervisorId,
+      subjectEmployeeId: pdp.employeeId,
+      metadata: { pdpId, goalId },
+    });
+  }
+  return serializePdp(await loadPdp(pdpId), user.role);
 }

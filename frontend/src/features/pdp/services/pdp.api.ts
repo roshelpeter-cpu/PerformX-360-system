@@ -20,6 +20,7 @@ export function listPdpsRequest(params?: { status?: string; search?: string; cyc
       approved: number;
       completed: number;
       changesRequested: number;
+      hrChanges?: number;
     };
     team: Array<{
       id: string;
@@ -59,6 +60,7 @@ export function savePdpDraftRequest(pdpId: string, body: { summary?: string; goa
       summary: body.summary,
       goals: body.goals.map((goal) => ({
         ...goal,
+        weightage: goal.weightage ? Number(goal.weightage) : undefined,
         startDate: goal.startDate || undefined,
         dueDate: goal.dueDate || undefined,
       })),
@@ -126,5 +128,12 @@ export function reviewPdpEvidenceRequest(evidenceId: string) {
   return apiRequest<{ success: true; pdp: PdpRecord }>(`/pdp/evidence/${evidenceId}/review`, {
     method: "POST",
     body: {},
+  });
+}
+
+export function addGoalCommentRequest(pdpId: string, goalId: string, message: string) {
+  return apiRequest<{ success: true; pdp: PdpRecord }>(`/pdp/${pdpId}/goals/${goalId}/comments`, {
+    method: "POST",
+    body: { message },
   });
 }

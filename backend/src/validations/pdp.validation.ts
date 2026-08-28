@@ -74,4 +74,9 @@ export const pdpEvidenceParamsSchema = z.object({
 
 export const pdpEvidenceKindSchema = z.enum(["DOCUMENT", "IMAGE", "CERTIFICATE", "SUPPORTING"]);
 
+export const goalCommentSchema = z.object({
+  message: z.string().trim().min(2, "Add a comment"),
+});
+
 export type UpdateGoalProgressInput = z.infer<typeof updateGoalProgressSchema>;
+export type GoalCommentInput = z.infer<typeof goalCommentSchema>;

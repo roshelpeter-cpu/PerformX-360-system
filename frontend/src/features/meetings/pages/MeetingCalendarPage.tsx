@@ -33,7 +33,9 @@ export default function MeetingCalendarPage() {
   const daysInMonth = new Date(year, month, 0).getDate();
   const startWeekday = new Date(year, month - 1, 1).getDay();
   const dayMap = useMemo(() => new Map((data?.days ?? []).map((item) => [item.day, item])), [data?.days]);
-  const selectedMeetings = (data?.meetings ?? []).filter((item) => new Date(item.scheduledAt).getDate() === selectedDay);
+  const selectedMeetings = data?.selectedDateMeetings?.length
+    ? data.selectedDateMeetings
+    : (data?.meetings ?? []).filter((item) => new Date(item.scheduledAt).getDate() === selectedDay);
   const monthLabel = new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
 
   function shift(delta: number) {
@@ -46,18 +48,22 @@ export default function MeetingCalendarPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <PageHeader
-            crumbs="Home / Meeting Calendar"
-            title="Meeting Calendar"
-            description="Review organisation meetings by month, type, and status."
-          />
-          {role === "HR" ? (
-            <Link to="/hr/meetings/planning">
-              <Button>+ Schedule Meeting</Button>
-            </Link>
-          ) : null}
-        </div>
+        <PageHeader
+          crumbs={`${role === "HR" ? "HR" : role === "SUPERVISOR" ? "Supervisor" : "Home"} / Meeting Management / Meeting Calendar`}
+          title="Meeting Calendar"
+          description="Review meetings by month, type, and status. The calendar combines Performance Planning, Follow-up, and Other meetings in scope for your role."
+          action={
+            role === "HR" ? (
+              <Link to="/hr/meetings/planning">
+                <Button>+ Schedule Meeting</Button>
+              </Link>
+            ) : role === "SUPERVISOR" ? (
+              <Link to="/supervisor/meetings/other">
+                <Button>+ Schedule Meeting</Button>
+              </Link>
+            ) : undefined
+          }
+        />
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <MetricCard label="Total Meetings" value={data?.stats.total ?? 0} />
@@ -87,7 +93,7 @@ export default function MeetingCalendarPage() {
                     Today
                   </Button>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <select className={`${fieldClass} w-48`} value={type} onChange={(event) => setType(event.target.value)}>
                     <option value="all">Meeting Type</option>
                     <option value="PERFORMANCE_PLANNING">Performance Planning</option>
@@ -101,6 +107,9 @@ export default function MeetingCalendarPage() {
                     <option value="COMPLETED">Completed</option>
                     <option value="CANCELLED">Cancelled</option>
                   </select>
+                  <Button type="button" variant="outline">
+                    Filter
+                  </Button>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs text-stone-400">

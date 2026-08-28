@@ -63,10 +63,16 @@ function groupByDay<T extends { id: string; createdAt: string }>(items: T[]) {
   return groups;
 }
 
+function evaluationPathForRole(role: string | undefined, evaluationId: string) {
+  if (role === "HR") return `/hr/evaluations/${evaluationId}`;
+  if (role === "SUPERVISOR") return `/supervisor/evaluations/${evaluationId}`;
+  return `/employee/results`;
+}
+
 function pdpPathForRole(role: string | undefined, pdpId: string) {
   if (role === "HR") return `/hr/pdp/${pdpId}`;
   if (role === "SUPERVISOR") return `/supervisor/pdp/${pdpId}`;
-  return `/employee/pdp/${pdpId}`;
+  return `/employee/pdp`;
 }
 
 export default function NotificationsPage() {
@@ -158,7 +164,13 @@ export default function NotificationsPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">{group.label}</p>
                   <div className="mt-3 space-y-3">
                     {group.items.map((item) => {
-                      const metadata = (item.metadata ?? {}) as { meetingId?: string; pdpId?: string };
+                      const metadata = (item.metadata ?? {}) as {
+                        meetingId?: string;
+                        pdpId?: string;
+                        evaluationId?: string;
+                        assignmentId?: string;
+                        requestId?: string;
+                      };
                       const linkedMeeting = metadata.meetingId ? meetingsById.get(metadata.meetingId) : undefined;
                       const category = (item.category ?? "employee") as keyof typeof CATEGORY_ICONS;
                       const catStyle = notificationCategoryStyle(category);
@@ -243,6 +255,27 @@ export default function NotificationsPage() {
                             {pdpId && (isPdpApproved || item.category === "pdp") && !isPdpSubmitted ? (
                               <Link to={pdpPathForRole(role, pdpId)}>
                                 <Button type="button" size="sm" variant="outline">View PDP</Button>
+                              </Link>
+                            ) : null}
+                            {metadata.evaluationId ? (
+                              <Link to={evaluationPathForRole(role, metadata.evaluationId)}>
+                                <Button type="button" size="sm" variant="outline">
+                                  Open evaluation
+                                </Button>
+                              </Link>
+                            ) : null}
+                            {item.type === "PEER_REVIEW_ASSIGNED" && role === "EMPLOYEE" ? (
+                              <Link to="/employee/peer-reviews">
+                                <Button type="button" size="sm" variant="outline">
+                                  Open peer review
+                                </Button>
+                              </Link>
+                            ) : null}
+                            {item.type === "APPRAISAL_REVIEW_REQUESTED" && role === "HR" ? (
+                              <Link to="/hr/review-requests">
+                                <Button type="button" size="sm" variant="outline">
+                                  Review requests
+                                </Button>
                               </Link>
                             ) : null}
                           </div>

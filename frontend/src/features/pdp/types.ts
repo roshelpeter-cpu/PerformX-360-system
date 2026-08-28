@@ -39,6 +39,7 @@ export interface PdpRecord {
   displayStatus: string;
   bucket?: string;
   hrReviewStatus?: string;
+  employeeApprovalStatus?: string;
   progressPercent?: number;
   daysRemaining?: number | null;
   summary: string | null;
@@ -77,6 +78,39 @@ export interface PdpRecord {
     createdAt: string;
     author: { id: string; employeeId: string; name: string; role: string };
   }>;
+  goalComments?: Array<{
+    id: string;
+    goalId: string;
+    message: string;
+    createdAt: string;
+    author: { id: string; employeeId: string; name: string; role: string };
+  }>;
+  activities?: Array<{
+    id: string;
+    type: string;
+    message: string;
+    createdAt: string;
+    goalId: string | null;
+    goalTitle: string | null;
+    actor: { id: string; employeeId: string; name: string } | null;
+  }>;
+  timeline?: Array<{ id: string; label: string; state: "done" | "current" | "upcoming" }>;
+  followUpMeetings?: Array<{
+    id: string;
+    title: string;
+    scheduledAt: string;
+    endAt: string | null;
+    status: string;
+    type: string;
+  }>;
+  notifications?: Array<{
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    createdAt: string;
+    status: string;
+  }>;
   createdAt?: string;
   updatedAt?: string;
   actions: {
@@ -99,6 +133,10 @@ export type GoalDraft = {
   startDate: string;
   dueDate: string;
   measurementKpi: string;
+  notes: string;
+  category: string;
+  priority: "LOW" | "MEDIUM" | "HIGH";
+  weightage: string;
 };
 
 export const emptyGoal = (): GoalDraft => ({
@@ -109,4 +147,8 @@ export const emptyGoal = (): GoalDraft => ({
   startDate: "",
   dueDate: "",
   measurementKpi: "",
+  notes: "",
+  category: "Technical",
+  priority: "MEDIUM",
+  weightage: "2.5",
 });

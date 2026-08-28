@@ -184,10 +184,12 @@ export function MiniCalendar({
   marked,
   selected,
   onSelect,
+  heading = "This month",
 }: {
   marked?: Map<number, Array<"planning" | "followUp" | "other">>;
   selected?: number;
   onSelect?: (day: number) => void;
+  heading?: string;
 }) {
   const now = new Date();
   const year = now.getFullYear();
@@ -198,9 +200,7 @@ export function MiniCalendar({
   const today = now.getDate();
   return (
     <div className={cn(surfaceClass, "p-4")}>
-      <p className="text-sm font-medium">
-        {now.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-      </p>
+      <p className="text-sm font-medium">{heading}</p>
       <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] text-stone-400">
         {["S", "M", "T", "W", "T", "F", "S"].map((day, index) => (
           <span key={`${day}-${index}`}>{day}</span>
@@ -211,35 +211,23 @@ export function MiniCalendar({
         {Array.from({ length: daysInMonth }).map((_, index) => {
           const day = index + 1;
           const dots = marked?.get(day) ?? [];
+          const hasEvent = dots.length > 0;
           const isToday = today === day;
           const isSelected = selected === day;
+          const filled = isSelected || (hasEvent && !onSelect);
           return (
             <button
               key={day}
               type="button"
               onClick={() => onSelect?.(day)}
               className={cn(
-                "flex h-9 flex-col items-center justify-center rounded-lg text-xs",
-                isSelected && "bg-amber-100 font-semibold dark:bg-amber-400/20",
-                isToday && !isSelected && "ring-1 ring-stone-900 dark:ring-stone-100"
+                "mx-auto flex h-8 w-8 items-center justify-center rounded-full text-xs",
+                filled && "bg-stone-900 font-semibold text-white dark:bg-stone-100 dark:text-stone-950",
+                hasEvent && !filled && "ring-1 ring-stone-300 dark:ring-stone-600",
+                isToday && !filled && !hasEvent && "ring-1 ring-stone-900 dark:ring-stone-100"
               )}
             >
               {day}
-              {dots.length > 0 ? (
-                <span className="mt-0.5 flex gap-0.5">
-                  {dots.slice(0, 3).map((kind) => (
-                    <span
-                      key={kind}
-                      className={cn(
-                        "h-1 w-1 rounded-full",
-                        kind === "planning" && "bg-orange-500",
-                        kind === "followUp" && "bg-sky-600",
-                        kind === "other" && "bg-emerald-600"
-                      )}
-                    />
-                  ))}
-                </span>
-              ) : null}
             </button>
           );
         })}

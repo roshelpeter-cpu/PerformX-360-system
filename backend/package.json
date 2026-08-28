@@ -12,6 +12,8 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed-pdp": "tsx prisma/seed-pdp-workflow.ts",
+    "db:seed-evaluation": "tsx prisma/seed-evaluation.ts",
     "db:start": "powershell -ExecutionPolicy Bypass -File scripts/start-postgres.ps1",
     "db:reset-schema": "node scripts/reset-public-schema.mjs",
     "db:setup": "prisma generate && prisma migrate deploy && tsx prisma/seed.ts",

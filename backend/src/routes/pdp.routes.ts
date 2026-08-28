@@ -16,6 +16,7 @@ import {
   submitPdpRecord,
   updateGoalProgressRecord,
   uploadPdpEvidenceRecord,
+  addGoalCommentRecord,
 } from "../controllers/pdp.controller.js";
 import {
   createPdpSchema,
@@ -27,6 +28,7 @@ import {
   pdpRedirectSchema,
   savePdpDraftSchema,
   updateGoalProgressSchema,
+  goalCommentSchema,
 } from "../validations/pdp.validation.js";
 import { z } from "zod";
 import { optionalEvidenceUpload } from "../middlewares/upload.js";
@@ -91,6 +93,12 @@ pdpRouter.put(
   validateParams(pdpGoalParamsSchema),
   validateBody(updateGoalProgressSchema),
   updateGoalProgressRecord
+);
+pdpRouter.post(
+  "/:pdpId/goals/:goalId/comments",
+  validateParams(pdpGoalParamsSchema),
+  validateBody(goalCommentSchema),
+  addGoalCommentRecord
 );
 pdpRouter.post(
   "/:pdpId/goals/:goalId/evidence",

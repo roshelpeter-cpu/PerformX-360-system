@@ -62,6 +62,16 @@ model Employee {
   appraisalReviews                      AppraisalReview[]              @relation("AppraisalReviewEmployee")
   appraisalReviewsAuthored              AppraisalReview[]              @relation("AppraisalReviewReviewer")
   pdpEvidenceUploaded                   PdpEvidence[]                  @relation("PdpEvidenceUploader")
+  pdpActivitiesAuthored                 PdpActivity[]                  @relation("PdpActivityActor")
+  pdpGoalCommentsAuthored               PdpGoalComment[]               @relation("PdpGoalCommentAuthor")
+  evaluationsAsEmployee                 PerformanceEvaluation[]        @relation("EvaluationEmployee")
+  evaluationsAsSupervisor               PerformanceEvaluation[]        @relation("EvaluationSupervisor")
+  evaluationsApproved                   PerformanceEvaluation[]        @relation("EvaluationApprovedBy")
+  peerReviewsAssigned                   PeerReviewAssignment[]         @relation("PeerReviewer")
+  pipPlansAsEmployee                    PipPlan[]                      @relation("PipEmployee")
+  pipPlansAsSupervisor                  PipPlan[]                      @relation("PipSupervisor")
+  appraisalReviewRequests               AppraisalReviewRequest[]       @relation("ReviewRequestEmployee")
+  appraisalReviewResponses              AppraisalReviewRequest[]       @relation("ReviewRequestResponder")
 }
 
 model AppraisalCycle {
@@ -92,6 +102,9 @@ model AppraisalCycle {
   supervisorAssignmentHistory SupervisorAssignmentHistory[]
   employeeProgress            EmployeeCycleProgress[]
   appraisalReviews            AppraisalReview[]
+  performanceEvaluations      PerformanceEvaluation[]
+  pipPlans                    PipPlan[]
+  appraisalReviewRequests     AppraisalReviewRequest[]
 
   @@index([status])
   @@index([startDate])
@@ -125,6 +138,7 @@ model AppraisalBatch {
   meetings                  Meeting[]
   pdps                      PersonalDevelopmentPlan[]
   employeeProgress          EmployeeCycleProgress[]
+  performanceEvaluations    PerformanceEvaluation[]
 
   @@unique([cycleId, batchNumber])
   @@index([cycleId])
@@ -392,6 +406,8 @@ model PersonalDevelopmentPlan {
   redirectedReason                                               String?
   goals                                                          PdpGoal[]
   evidence                                                       PdpEvidence[]
+  activities                                                     PdpActivity[]
+  goalComments                                                   PdpGoalComment[]
   PdpReviewComment                                               PdpReviewComment[]
   approvedBy                                                     Employee?          @relation("PdpApprovedBy", fields: [approvedById], references: [id])
   batch                                                          AppraisalBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
@@ -430,9 +446,41 @@ model PdpGoal {
   successCriteria  String?
   weightage        Float                   @default(0)
   evidence         PdpEvidence[]
+  comments         PdpGoalComment[]
+  activities       PdpActivity[]
   pdp              PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
 
   @@index([pdpId])
+}
+
+model PdpGoalComment {
+  id        String                  @id @default(cuid())
+  pdpId     String
+  goalId    String
+  authorId  String
+  message   String
+  createdAt DateTime                @default(now())
+  author    Employee                @relation("PdpGoalCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  goal      PdpGoal                 @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  pdp       PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+
+  @@index([pdpId])
+  @@index([goalId])
+}
+
+model PdpActivity {
+  id        String                  @id @default(cuid())
+  pdpId     String
+  goalId    String?
+  actorId   String?
+  type      PdpActivityType
+  message   String
+  createdAt DateTime                @default(now())
+  actor     Employee?               @relation("PdpActivityActor", fields: [actorId], references: [id])
+  goal      PdpGoal?                @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  pdp       PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+
+  @@index([pdpId, createdAt])
 }
 
 model PdpEvidence {
@@ -482,11 +530,18 @@ model AppraisalOutcome {
   promotionRecommended       Boolean         @default(false)
   promotionTitle             String?
   promotionNotes             String?
+  promotionStatus            PromotionStatus @default(NONE)
+  selfScore                  Float?
+  peerScore                  Float?
+  supervisorScore            Float?
+  hrComments                 String?
+  evaluationId               String?         @unique
   createdAt                  DateTime        @default(now())
   updatedAt                  DateTime        @updatedAt
   batch                      AppraisalBatch? @relation(fields: [batchId], references: [id])
   cycle                      AppraisalCycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
   employee                   Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  evaluation                 PerformanceEvaluation? @relation(fields: [evaluationId], references: [id])
 
   @@unique([cycleId, employeeId])
   @@index([employeeId])
@@ -651,6 +706,126 @@ model PdpReviewComment {
   @@index([pdpId])
 }
 
+model PerformanceEvaluation {
+  id                       String                 @id @default(cuid())
+  employeeId               String
+  supervisorId             String?
+  cycleId                  String
+  batchId                  String?
+  status                   EvaluationStatus       @default(NOT_STARTED)
+  selfOpenedAt             DateTime?
+  selfScore                Float?
+  selfComments             String?
+  selfGoalReviews          Json?
+  selfDraftSavedAt         DateTime?
+  selfSubmittedAt          DateTime?
+  peerScore                Float?
+  peerSummary              String?
+  supervisorScore          Float?
+  supervisorComments       String?
+  strengths                String?
+  improvementAreas         String?
+  developmentRecommendations String?
+  promotionRecommended     Boolean                @default(false)
+  supervisorSubmittedAt    DateTime?
+  hrComments               String?
+  hrApprovedAt             DateTime?
+  hrApprovedById           String?
+  finalScore               Float?
+  performanceBand          String?
+  bonusEligible            Boolean                @default(false)
+  bonusAmount              Float?
+  promotionStatus          PromotionStatus        @default(NONE)
+  awardType                AwardType?
+  awardConfirmed           Boolean                @default(false)
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  employee                 Employee               @relation("EvaluationEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisor               Employee?              @relation("EvaluationSupervisor", fields: [supervisorId], references: [id])
+  approvedBy               Employee?              @relation("EvaluationApprovedBy", fields: [hrApprovedById], references: [id])
+  cycle                    AppraisalCycle         @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  batch                    AppraisalBatch?        @relation(fields: [batchId], references: [id])
+  peerAssignments          PeerReviewAssignment[]
+  outcome                  AppraisalOutcome?
+  pipPlan                  PipPlan?
+  reviewRequests           AppraisalReviewRequest[]
+
+  @@unique([cycleId, employeeId])
+  @@index([status])
+  @@index([supervisorId])
+}
+
+model PeerReviewAssignment {
+  id            String                 @id @default(cuid())
+  evaluationId  String
+  reviewerId    String
+  status        PeerReviewStatus       @default(PENDING)
+  score         Float?
+  comments      String?
+  submittedAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  evaluation    PerformanceEvaluation  @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  reviewer      Employee               @relation("PeerReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@unique([evaluationId, reviewerId])
+  @@index([reviewerId])
+}
+
+model PipPlan {
+  id             String                @id @default(cuid())
+  evaluationId   String                @unique
+  employeeId     String
+  supervisorId   String
+  cycleId        String
+  status         PipStatus             @default(REQUIRED)
+  startDate      DateTime?
+  endDate        DateTime?
+  reviewPeriod   String?
+  summary        String?
+  assignedAt     DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  evaluation     PerformanceEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  employee       Employee              @relation("PipEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  supervisor     Employee              @relation("PipSupervisor", fields: [supervisorId], references: [id])
+  cycle          AppraisalCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  goals          PipGoal[]
+}
+
+model PipGoal {
+  id               String   @id @default(cuid())
+  pipId            String
+  title            String
+  requiredActions  String
+  expectedOutcomes String
+  sortOrder        Int      @default(0)
+  pip              PipPlan  @relation(fields: [pipId], references: [id], onDelete: Cascade)
+
+  @@index([pipId])
+}
+
+model AppraisalReviewRequest {
+  id          String                 @id @default(cuid())
+  evaluationId String
+  employeeId  String
+  cycleId     String
+  reason      String
+  comments    String?
+  status      ReviewRequestStatus    @default(PENDING)
+  hrResponse  String?
+  respondedById String?
+  respondedAt DateTime?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  evaluation  PerformanceEvaluation  @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  employee    Employee               @relation("ReviewRequestEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  respondedBy Employee?              @relation("ReviewRequestResponder", fields: [respondedById], references: [id])
+  cycle       AppraisalCycle         @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
 enum Role {
   EMPLOYEE
   SUPERVISOR
@@ -688,6 +863,19 @@ enum NotificationType {
   PDP_INTERVENTION_REQUIRED
   PDP_ASSIGNED
   PDP_REDIRECTED
+  SELF_REVIEW_OPENED
+  SELF_REVIEW_SUBMITTED
+  PEER_REVIEW_ASSIGNED
+  PEER_REVIEW_SUBMITTED
+  SUPERVISOR_EVALUATION_READY
+  SUPERVISOR_EVALUATION_SUBMITTED
+  APPRAISAL_APPROVED
+  APPRAISAL_REVIEW_REQUESTED
+  APPRAISAL_REVIEW_RESPONDED
+  PROMOTION_UPDATED
+  AWARD_CONFIRMED
+  PIP_REQUIRED
+  PIP_ASSIGNED
 }
 
 enum NotificationStatus {
@@ -833,6 +1021,22 @@ enum PdpReviewKind {
   HR_INTERVENTION
   HR_CHANGE_REQUEST
   SUPERVISOR_REDIRECT
+  GOAL_COMMENT
+}
+
+enum PdpActivityType {
+  PDP_CREATED
+  PDP_SUBMITTED
+  EMPLOYEE_APPROVED
+  EMPLOYEE_CHANGES_REQUESTED
+  HR_APPROVED
+  HR_CHANGES_REQUESTED
+  PDP_ASSIGNED
+  PROGRESS_UPDATED
+  EVIDENCE_UPLOADED
+  COMMENT_ADDED
+  GOAL_UPDATED
+  FOLLOW_UP_SCHEDULED
 }
 
 enum PipStatus {
@@ -841,10 +1045,49 @@ enum PipStatus {
   ASSIGNED
   ACTIVE
   COMPLETED
+  DISCUSSION_PENDING
+  DRAFT
+  FAILED
 }
 
 enum AppraisalReviewKind {
   SELF
   PEER
   SUPERVISOR
+}
+
+enum EvaluationStatus {
+  NOT_STARTED
+  SELF_REVIEW_PENDING
+  PEER_REVIEW_PENDING
+  SUPERVISOR_REVIEW_PENDING
+  WAITING_HR_REVIEW
+  APPROVED
+}
+
+enum PeerReviewStatus {
+  PENDING
+  SUBMITTED
+}
+
+enum PromotionStatus {
+  NONE
+  RECOMMENDED
+  UNDER_REVIEW
+  SHORTLISTED
+  APPROVED
+  NOT_SELECTED
+}
+
+enum ReviewRequestStatus {
+  PENDING
+  UNDER_REVIEW
+  RESPONDED
+  CLOSED
+}
+
+enum AwardType {
+  EMPLOYEE_OF_THE_CYCLE
+  OUTSTANDING_PERFORMANCE
+  EXCELLENCE
 }

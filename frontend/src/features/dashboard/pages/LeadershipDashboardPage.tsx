@@ -10,6 +10,7 @@ import {
   Panel,
   StatCard,
 } from "@/features/dashboard/components/DashboardUi";
+import { LeadershipAnalyticsPanel } from "@/features/evaluation/pages/EvaluationPages";
 
 export default function LeadershipDashboardPage() {
   const query = useMyDashboard();
@@ -26,7 +27,7 @@ export default function LeadershipDashboardPage() {
           <DashboardHero
             eyebrow="Leadership workspace"
             title="Organisation performance overview"
-            description="A read-only view of appraisal cycles, workforce coverage, and department size."
+            description="A read-only view of organisation performance, appraisal completion, promotions, PIP, and PDP progress. Leadership cannot modify evaluations."
           />
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -47,6 +48,8 @@ export default function LeadershipDashboardPage() {
               value={data.workforce?.departmentCount ?? 0}
             />
           </div>
+
+          <LeadershipAnalyticsPanel />
 
           <Panel title="Your notifications">
             {data.notifications.length === 0 ? (

@@ -19,6 +19,21 @@ import {
   PdpDetailPage,
   SupervisorPdpPage,
 } from "@/features/pdp/pages/PdpPages";
+import {
+  EmployeePeerReviewsPage,
+  EmployeeResultsPage,
+  EmployeeSelfReviewPage,
+  EvaluationDetailPage,
+  HrAwardsPage,
+  HrEvaluationsPage,
+  HrPeerReviewPage,
+  HrPromotionsPage,
+  HrRecognitionPage,
+  HrReviewRequestsPage,
+  PipManagementPage,
+  ReportsPage,
+  SupervisorEvaluationsPage,
+} from "@/features/evaluation/pages/EvaluationPages";
 import HrDashboardPage from "@/features/dashboard/pages/HrDashboardPage";
 import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashboardPage";
 import EmployeesPage from "@/features/employees/pages/EmployeesPage";
@@ -291,6 +306,150 @@ function AppRouter() {
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                 <EmployeePdpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/pdp/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <EmployeePdpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/self-review"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <EmployeeSelfReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/peer-reviews"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <EmployeePeerReviewsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/results"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <EmployeeResultsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/pip"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <PipManagementPage role="EMPLOYEE" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/evaluations"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <HrEvaluationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/evaluations/:evaluationId"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <EvaluationDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/peer-reviews"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <HrPeerReviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/recognition"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <HrRecognitionPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/promotions"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <HrPromotionsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/awards"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <HrAwardsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/pip"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <PipManagementPage role="HR" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/review-requests"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <HrReviewRequestsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/reports"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/evaluations"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <SupervisorEvaluationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/evaluations/:evaluationId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <EvaluationDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/pip"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <PipManagementPage role="SUPERVISOR" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/leadership/reports"
+            element={
+              <ProtectedRoute allowedRoles={["LEADERSHIP"]}>
+                <ReportsPage />
               </ProtectedRoute>
             }
           />

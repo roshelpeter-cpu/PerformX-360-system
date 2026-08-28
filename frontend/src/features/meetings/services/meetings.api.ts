@@ -126,6 +126,8 @@ export function listFollowUpMeetingsRequest(params: {
       scheduledCount: number;
     }>;
     calendarDates?: string[];
+    confirmationQueue?: PlanningMeeting[];
+    nextSevenDays?: PlanningMeeting[];
     cycle?: { id: string; name: string; status: string } | null;
     page: number;
     pageSize: number;
@@ -167,6 +169,8 @@ export function listOtherMeetingsRequest(params: {
       scheduledCount: number;
     }>;
     calendarDates?: string[];
+    confirmationQueue?: PlanningMeeting[];
+    nextSevenDays?: PlanningMeeting[];
     cycle?: { id: string; name: string; status: string } | null;
     page: number;
     pageSize: number;

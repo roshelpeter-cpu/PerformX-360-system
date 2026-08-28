@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Eye, Search } from "lucide-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 import DashboardLayout from "@/app/layouts/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +18,7 @@ import { formatDate } from "@/features/hr/utils/dates";
 import { API_BASE_URL } from "@/services/api/client";
 import { useAuthStore } from "@/store/authStore";
 import { MIN_PDP_GOALS, emptyGoal, type GoalDraft, type PdpRecord } from "../types";
+import { EmployeePdpDashboard } from "./EmployeePdpDashboard";
 import {
   useAssignPdp,
   useCreatePdp,
@@ -29,8 +31,6 @@ import {
   useReviewPdpEvidence,
   useSavePdpDraft,
   useSubmitPdp,
-  useUpdateGoalProgress,
-  useUploadPdpEvidence,
 } from "../hooks/usePdp";
 
 function pdpPath(role: string, pdpId?: string) {
@@ -39,148 +39,90 @@ function pdpPath(role: string, pdpId?: string) {
   return pdpId ? `${base}/${pdpId}` : base;
 }
 
-export function SupervisorPdpPage() {
-  const list = usePdpList();
-  const create = useCreatePdp();
-  const navigate = useNavigate();
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("all");
-  const team = list.data?.team ?? [];
-  const filtered = team.filter((member) => {
-    const haystack = `${member.name} ${member.employeeId} ${member.jobTitle ?? ""}`.toLowerCase();
-    if (search && !haystack.includes(search.toLowerCase())) return false;
-    if (status === "all") return true;
-    if (status === "none") return !member.pdp;
-    return member.pdp?.bucket === status || member.pdp?.status === status;
-  });
+type ManagementRole = "HR" | "SUPERVISOR";
 
-  return (
-    <DashboardLayout>
-      <PageHeader
-        crumbs="Supervisor / PDP Creation and Management"
-        title="PDP Creation and Management"
-        description={`Create a PDP only for employees who do not already have one. Drafts can be built gradually; submission requires at least ${MIN_PDP_GOALS} goals.`}
-      />
-      <div className="mt-5 flex flex-wrap gap-3">
-        <div className="relative min-w-[240px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-          <input
-            className={`${fieldClass} pl-9`}
-            placeholder="Search employee"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
-        <select className={`${fieldClass} max-w-xs`} value={status} onChange={(event) => setStatus(event.target.value)}>
-          <option value="all">All PDP statuses</option>
-          <option value="none">Without PDP</option>
-          <option value="draft">Draft</option>
-          <option value="waiting_employee">Waiting Employee Approval</option>
-          <option value="waiting_hr">Waiting HR Approval</option>
-          <option value="approved">Approved</option>
-          <option value="completed">Completed</option>
-        </select>
-        <select className={`${fieldClass} max-w-xs`} defaultValue={list.data?.cycle?.id ?? ""}>
-          <option value={list.data?.cycle?.id ?? ""}>{list.data?.cycle?.name ?? "Current appraisal cycle"}</option>
-        </select>
-      </div>
-      <div className={`${surfaceClass} mt-5 overflow-x-auto`}>
-        <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-stone-100 text-[11px] uppercase tracking-wide text-stone-400 dark:border-stone-800">
-            <tr>
-              <th className="px-5 py-3">Employee</th>
-              <th className="px-5 py-3">Employee ID</th>
-              <th className="px-5 py-3">Department</th>
-              <th className="px-5 py-3">PDP Status</th>
-              <th className="px-5 py-3">Goals</th>
-              <th className="px-5 py-3">Progress</th>
-              <th className="px-5 py-3">Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((member) => (
-              <tr key={member.id} className="border-b border-stone-50 dark:border-stone-800">
-                <td className="px-5 py-3">
-                  <p className="font-medium">{member.name}</p>
-                  <p className="text-xs text-stone-500">{member.jobTitle ?? "—"}</p>
-                </td>
-                <td className="px-5 py-3">{member.employeeId}</td>
-                <td className="px-5 py-3">{member.department?.name ?? "—"}</td>
-                <td className="px-5 py-3">
-                  <StatusBadge status={member.pdp?.status ?? "NOT_STARTED"} />
-                </td>
-                <td className="px-5 py-3">{member.pdp ? `${member.pdp.goalCount}/${MIN_PDP_GOALS}` : "—"}</td>
-                <td className="px-5 py-3 w-40">
-                  {member.pdp ? (
-                    <div>
-                      <ProgressBar value={member.pdp.progressPercent ?? 0} />
-                      <p className="mt-1 text-xs text-stone-500">{member.pdp.progressPercent ?? 0}%</p>
-                    </div>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="px-5 py-3">
-                  {member.pdp ? (
-                    <Link to={`/supervisor/pdp/${member.pdp.id}`}>
-                      <Button size="sm" variant="outline">
-                        <Eye className="h-4 w-4" /> Open PDP
-                      </Button>
-                    </Link>
-                  ) : (
-                    <Button
-                      size="sm"
-                      disabled={create.isPending}
-                      onClick={async () => {
-                        const result = await create.mutateAsync(member.id);
-                        navigate(`/supervisor/pdp/${result.pdp.id}`);
-                      }}
-                    >
-                      Create PDP
-                    </Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 ? <p className="px-5 py-8 text-sm text-stone-500">No employees match these filters.</p> : null}
-      </div>
-    </DashboardLayout>
-  );
+function reviewTone(value?: string) {
+  if (value === "Approved") return "text-emerald-700";
+  if (value === "Changes Requested" || value === "Pending") return "text-amber-800";
+  return "text-stone-400";
 }
 
-export function HrPdpPage() {
+function PdpManagementPage({ role }: { role: ManagementRole }) {
   const [tab, setTab] = useState("all");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+  const create = useCreatePdp();
+  const navigate = useNavigate();
   const list = usePdpList({ status: tab === "all" ? undefined : tab, page, search: search || undefined });
   const stats = list.data?.stats;
   const pdps = list.data?.pdps ?? [];
+  const team = list.data?.team ?? [];
+  const isSupervisor = role === "SUPERVISOR";
+  const basePath = isSupervisor ? "/supervisor/pdp" : "/hr/pdp";
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
+
+  const rows = useMemo(() => {
+    if (!isSupervisor) return pdps.map((pdp) => ({ key: pdp.id, pdp, memberId: null as string | null }));
+    const fromPdps = pdps.map((pdp) => ({ key: pdp.id, pdp, memberId: pdp.employee.id as string | null }));
+    if (tab !== "all" && tab !== "draft") return fromPdps;
+    const missing = team
+      .filter((member) => !member.pdp)
+      .filter((member) => {
+        const haystack = `${member.name} ${member.employeeId}`.toLowerCase();
+        return !search || haystack.includes(search.toLowerCase());
+      })
+      .map((member) => ({ key: member.id, pdp: null as PdpRecord | null, memberId: member.id }));
+    return [...fromPdps, ...missing];
+  }, [isSupervisor, pdps, team, tab, search]);
+
+  const setFilter = (value: string) => {
+    setTab(value);
+    setPage(1);
+  };
 
   return (
     <DashboardLayout>
       <PageHeader
-        crumbs="Home / Performance Management / PDP Management"
-        title="PDP Management"
-        description="Review submitted Personal Development Plans. HR approves the plan or suggests changes; supervisors remain the only people who edit goals."
+        crumbs={isSupervisor ? "Supervisor / PDP Creation and Management" : "HR Dashboard / PDP Management"}
+        title={isSupervisor ? "PDP Creation and Management" : "PDP Management"}
+        description={
+          isSupervisor
+            ? "Manage Personal Development Plans for employees in your team. Create drafts, submit for approval, and respond to change requests. Only supervisors edit goals."
+            : "Review submitted Personal Development Plans. HR approves the plan or suggests changes; supervisors remain the only people who edit goals."
+        }
       />
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        <MetricCard label="All PDPs" value={stats?.all ?? pdps.length} />
-        <MetricCard label="Waiting HR Approval" value={stats?.waitingHr ?? 0} accent="orange" highlight />
-        <MetricCard label="Waiting Employee Approval" value={stats?.waitingEmployee ?? 0} />
-        <MetricCard label="Approved" value={stats?.approved ?? 0} accent="green" />
-        <MetricCard label="Completed" value={stats?.completed ?? 0} />
-        <MetricCard label="Draft" value={stats?.draft ?? 0} />
+        <button type="button" onClick={() => setFilter("all")} className="text-left">
+          <MetricCard label="All PDPs" value={stats?.all ?? pdps.length} highlight={tab === "all"} />
+        </button>
+        <button type="button" onClick={() => setFilter("waiting_hr")} className="text-left">
+          <MetricCard label="Waiting HR Approval" value={stats?.waitingHr ?? 0} accent="orange" highlight={tab === "waiting_hr"} />
+        </button>
+        <button type="button" onClick={() => setFilter("waiting_employee")} className="text-left">
+          <MetricCard label="Waiting Employee Approval" value={stats?.waitingEmployee ?? 0} highlight={tab === "waiting_employee"} />
+        </button>
+        <button type="button" onClick={() => setFilter("approved")} className="text-left">
+          <MetricCard label="Approved" value={stats?.approved ?? 0} accent="green" highlight={tab === "approved"} />
+        </button>
+        <button type="button" onClick={() => setFilter("completed")} className="text-left">
+          <MetricCard label="Completed" value={stats?.completed ?? 0} highlight={tab === "completed"} />
+        </button>
+        <button type="button" onClick={() => setFilter("draft")} className="text-left">
+          <MetricCard label="Draft" value={stats?.draft ?? 0} highlight={tab === "draft"} />
+        </button>
       </div>
       <div className="mt-5 flex flex-wrap items-center gap-3">
         <FilterTabs
           value={tab}
-          onChange={(value) => {
-            setTab(value);
-            setPage(1);
-          }}
+          onChange={setFilter}
           items={[
             { id: "all", label: "All PDPs", count: stats?.all },
             { id: "waiting_hr", label: "Waiting HR Approval", count: stats?.waitingHr },
@@ -197,12 +139,6 @@ export function HrPdpPage() {
             placeholder="Search employee or ID"
             value={searchInput}
             onChange={(event) => setSearchInput(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                setSearch(searchInput);
-                setPage(1);
-              }
-            }}
           />
         </div>
       </div>
@@ -216,41 +152,83 @@ export function HrPdpPage() {
               <th className="px-5 py-3">Goals</th>
               <th className="px-5 py-3">PDP progress</th>
               <th className="px-5 py-3">Status</th>
+              {isSupervisor ? <th className="px-5 py-3">Employee review</th> : null}
               <th className="px-5 py-3">HR review</th>
               <th className="px-5 py-3">Last updated</th>
               <th className="px-5 py-3">Action</th>
             </tr>
           </thead>
           <tbody>
-            {pdps.map((pdp) => (
-              <tr key={pdp.id} className="border-b border-stone-50 dark:border-stone-800">
-                <td className="px-5 py-3">
-                  <p className="font-medium">{pdp.employee.name}</p>
-                  <p className="text-xs text-stone-500">
-                    {pdp.employee.employeeId} · {pdp.employee.jobTitle ?? "—"}
-                    {pdp.employee.department ? ` — ${pdp.employee.department.name}` : ""}
-                  </p>
-                </td>
-                <td className="px-5 py-3">{pdp.supervisor?.name ?? "—"}</td>
-                <td className="px-5 py-3">{pdp.cycle.name}</td>
-                <td className="px-5 py-3">{pdp.goalCount}/{pdp.minGoals}</td>
-                <td className="px-5 py-3 w-40">
-                  <ProgressBar value={pdp.progressPercent ?? 0} />
-                  <p className="mt-1 text-xs text-stone-500">{pdp.progressPercent ?? 0}%</p>
-                </td>
-                <td className="px-5 py-3"><StatusBadge status={pdp.status} /></td>
-                <td className="px-5 py-3"><StatusBadge status={pdp.hrReviewStatus === "Approved" ? "APPROVED" : pdp.hrReviewStatus === "Waiting" ? "PENDING" : "NOT_STARTED"} /></td>
-                <td className="px-5 py-3">{formatDate(pdp.updatedAt)}</td>
-                <td className="px-5 py-3">
-                  <Link to={`/hr/pdp/${pdp.id}`}>
-                    <Button size="sm" variant="outline"><Eye className="h-4 w-4" /> Open</Button>
-                  </Link>
-                </td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const pdp = row.pdp;
+              const member = team.find((item) => item.id === row.memberId);
+              const employee = pdp?.employee ?? member;
+              if (!employee) return null;
+              return (
+                <tr key={row.key} className="border-b border-stone-50 dark:border-stone-800">
+                  <td className="px-5 py-3">
+                    <p className="font-medium">{employee.name}</p>
+                    <p className="text-xs text-stone-500">
+                      {employee.employeeId} · {employee.jobTitle ?? "—"}
+                      {employee.department ? ` — ${employee.department.name}` : ""}
+                    </p>
+                  </td>
+                  <td className="px-5 py-3">{pdp?.supervisor?.name ?? "—"}</td>
+                  <td className="px-5 py-3">{pdp?.cycle.name ?? list.data?.cycle?.name ?? "—"}</td>
+                  <td className="px-5 py-3">{pdp ? `${pdp.goalCount}/${pdp.minGoals}` : `0/${MIN_PDP_GOALS}`}</td>
+                  <td className="px-5 py-3 w-40">
+                    {pdp ? (
+                      <>
+                        <ProgressBar value={pdp.progressPercent ?? 0} />
+                        <p className="mt-1 text-xs text-stone-500">{pdp.progressPercent ?? 0}%</p>
+                      </>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-5 py-3">
+                    <StatusBadge status={pdp?.status ?? "NOT_STARTED"} />
+                  </td>
+                  {isSupervisor ? (
+                    <td className="px-5 py-3">
+                      <span className={reviewTone(pdp?.employeeApprovalStatus)}>
+                        {pdp?.employeeApprovalStatus ?? "Not Submitted"}
+                      </span>
+                    </td>
+                  ) : null}
+                  <td className="px-5 py-3">
+                    <span className={reviewTone(pdp?.hrReviewStatus)}>
+                      {pdp?.hrReviewStatus ?? "Not Started"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3">{pdp ? formatDate(pdp.updatedAt) : "—"}</td>
+                  <td className="px-5 py-3">
+                    {pdp ? (
+                      <Link to={`${basePath}/${pdp.id}`}>
+                        <Button size="sm" variant="outline">
+                          <Eye className="h-4 w-4" /> Open
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Button
+                        size="sm"
+                        disabled={create.isPending}
+                        onClick={async () => {
+                          if (!row.memberId) return;
+                          const result = await create.mutateAsync(row.memberId);
+                          navigate(`${basePath}/${result.pdp.id}`);
+                        }}
+                      >
+                        Create PDP
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
-        {pdps.length === 0 && !list.isLoading ? (
+        {rows.length === 0 && !list.isLoading ? (
           <p className="px-5 py-8 text-sm text-stone-500">No PDPs in this view.</p>
         ) : null}
       </div>
@@ -268,52 +246,64 @@ export function HrPdpPage() {
   );
 }
 
+export function SupervisorPdpPage() {
+  return <PdpManagementPage role="SUPERVISOR" />;
+}
+
+export function HrPdpPage() {
+  return <PdpManagementPage role="HR" />;
+}
+
 export function EmployeePdpPage() {
   const query = useMyPdp();
   const pdp = query.data?.pdp;
   const [showDashboard, setShowDashboard] = useState(false);
-
-  useEffect(() => {
-    if (!pdp?.id) return;
-    setShowDashboard(localStorage.getItem(`performx:pdp-dashboard:${pdp.id}`) === "1");
-  }, [pdp?.id]);
-
-  const canOpenDashboard =
-    Boolean(pdp) &&
-    !pdp?.actions.canEmployeeReview &&
-    ["ASSIGNED", "COMPLETED"].includes(pdp?.status ?? "");
+  const assigned = pdp?.status === "ASSIGNED" || pdp?.status === "COMPLETED";
 
   return (
     <DashboardLayout>
-      <PageHeader crumbs="Employee / My PDP" title="My PDP" description="Review, approve, and then work from your PDP dashboard." />
-      {query.isLoading ? <p className="mt-4 text-sm text-stone-500">Loading your PDP…</p> : null}
-      {pdp ? (
-        showDashboard && canOpenDashboard ? (
-          <EmployeePdpDashboard pdp={pdp} onBack={() => setShowDashboard(false)} />
-        ) : (
-          <div className="mt-5 space-y-4">
-            {pdp.actions.canEmployeeReview ? (
-              <div className="rounded-xl border border-stone-200 bg-stone-50/80 px-4 py-3 text-sm text-stone-600 dark:border-stone-800 dark:bg-stone-950/40 dark:text-stone-300">
-                Your supervisor has submitted a PDP for your review. Please review the full plan below and choose Approve PDP or Request Changes. The interactive PDP dashboard becomes available after approval and assignment.
-              </div>
-            ) : null}
-            <PdpBody pdp={pdp} />
-            {canOpenDashboard ? (
-              <Button
-                type="button"
-                onClick={() => {
-                  localStorage.setItem(`performx:pdp-dashboard:${pdp.id}`, "1");
-                  setShowDashboard(true);
-                }}
-              >
-                Show My PDP Dashboard
-              </Button>
-            ) : null}
-          </div>
-        )
-      ) : !query.isLoading ? (
-        <p className="mt-4 text-sm text-stone-500">Your supervisor has not submitted a PDP for the current cycle yet.</p>
-      ) : null}
+      {showDashboard && pdp && assigned ? (
+        <EmployeePdpDashboard pdp={pdp} onBack={() => setShowDashboard(false)} />
+      ) : (
+        <>
+          <PageHeader
+            crumbs="Home / My PDP"
+            title="My PDP"
+            description="Review your Personal Development Plan. You can agree or request changes with a clear reason."
+          />
+          {query.isLoading ? <p className="mt-4 text-sm text-stone-500">Loading your PDP…</p> : null}
+          {pdp ? (
+            <div className="mt-5 space-y-4">
+              <PdpTimeline pdp={pdp} />
+              {(pdp.notifications ?? []).length > 0 ? (
+                <section className={`${surfaceClass} p-5`}>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold">PDP notifications</h3>
+                    <Link to="/notifications" className="text-xs text-stone-500 hover:underline">View All</Link>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {(pdp.notifications ?? []).slice(0, 3).map((item) => (
+                      <p key={item.id} className="text-sm text-stone-600">{item.title}</p>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+              <PdpBody pdp={pdp} />
+              {assigned ? (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center rounded-2xl bg-amber-400 px-6 py-4 text-base font-semibold text-stone-950 shadow-sm hover:bg-amber-300"
+                  onClick={() => setShowDashboard(true)}
+                >
+                  View My PDP Dashboard
+                </button>
+              ) : null}
+            </div>
+          ) : !query.isLoading ? (
+            <p className="mt-4 text-sm text-stone-500">Your supervisor has not created a PDP for the current cycle yet.</p>
+          ) : null}
+        </>
+      )}
     </DashboardLayout>
   );
 }
@@ -325,7 +315,16 @@ export function PdpDetailPage() {
   const pdp = query.data?.pdp;
   return (
     <DashboardLayout>
-      <Link to={pdpPath(role)} className="text-sm text-stone-500 hover:underline">← Back to PDPs</Link>
+      <PageHeader
+        crumbs={role === "HR" ? "HR Dashboard / PDP Management" : "Supervisor / PDP Creation and Management"}
+        title={pdp ? pdp.employee.name : "PDP details"}
+        description={pdp ? `${pdp.employee.employeeId} · ${pdp.cycle.name}` : "Review this Personal Development Plan."}
+        action={
+          <Link to={pdpPath(role)} className="text-sm text-stone-500 hover:underline">
+            ← Back to PDPs
+          </Link>
+        }
+      />
       {query.isLoading ? <p className="mt-4 text-sm text-stone-500">Loading PDP…</p> : null}
       {pdp ? <div className="mt-4"><PdpBody pdp={pdp} /></div> : null}
     </DashboardLayout>
@@ -356,24 +355,53 @@ function PdpBody({ pdp }: { pdp: PdpRecord }) {
       <section className={`${surfaceClass} p-6`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-xl font-semibold">{pdp.employee.name}</h2>
-            <p className="text-sm text-stone-500">{pdp.cycle.name} · {pdp.displayStatus}</p>
+            <h2 className="text-xl font-semibold">{role === "EMPLOYEE" ? pdp.cycle.name : pdp.employee.name}</h2>
+            <p className="mt-1 text-sm text-stone-500">
+              {pdp.goalCount} / {pdp.minGoals} · {Math.round(pdp.goals.reduce((sum, goal) => sum + (goal.weightage || 0), 0))}% total weightage
+              {pdp.cycle.startDate && pdp.cycle.endDate
+                ? ` · ${formatDate(pdp.cycle.startDate)} – ${formatDate(pdp.cycle.endDate)}`
+                : ""}
+            </p>
           </div>
           <StatusBadge status={pdp.status} />
         </div>
-        <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-          <Info label="Employee ID" value={pdp.employee.employeeId} />
-          <Info label="Position" value={pdp.employee.jobTitle ?? "—"} />
-          <Info label="Department" value={pdp.employee.department?.name ?? "—"} />
-          <Info label="Supervisor" value={pdp.supervisor?.name ?? "—"} />
-          <Info label="Appraisal Cycle" value={pdp.cycle.name} />
-          <Info label="Goals" value={`${pdp.goalCount} / ${pdp.minGoals}`} />
-        </div>
+        {pdp.summary ? (
+          <div className="mt-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Supervisor notes</p>
+            <p className="mt-2 text-sm text-stone-600">{pdp.summary}</p>
+          </div>
+        ) : null}
+        {role !== "EMPLOYEE" ? (
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+            <Info label="Employee ID" value={pdp.employee.employeeId} />
+            <Info label="Position" value={pdp.employee.jobTitle ?? "—"} />
+            <Info label="Department" value={pdp.employee.department?.name ?? "—"} />
+            <Info label="Supervisor" value={pdp.supervisor?.name ?? "—"} />
+            <Info label="Appraisal Cycle" value={pdp.cycle.name} />
+            <Info label="Employee approval" value={pdp.employeeApprovalStatus ?? "—"} />
+            <Info label="HR review" value={pdp.hrReviewStatus ?? "—"} />
+            <Info label="Goals" value={`${pdp.goalCount} / ${pdp.minGoals}`} />
+          </div>
+        ) : null}
       </section>
 
       {pdp.employeeChangeRequest ? <Callout title="Employee change request">{pdp.employeeChangeRequest}</Callout> : null}
       {pdp.hrChangeRequest ? <Callout title="HR change request">{pdp.hrChangeRequest}</Callout> : null}
       {pdp.redirectedReason ? <Callout title="Redirected to HR">{pdp.redirectedReason}</Callout> : null}
+
+      {(pdp.notifications ?? []).length > 0 && role !== "EMPLOYEE" ? (
+        <section className={`${surfaceClass} p-5`}>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">PDP notifications</h3>
+            <Link to="/notifications" className="text-xs text-stone-500 hover:underline">View All</Link>
+          </div>
+          <div className="mt-3 space-y-2">
+            {(pdp.notifications ?? []).slice(0, 4).map((item) => (
+              <p key={item.id} className="text-sm text-stone-600">{item.title}: {item.message}</p>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {pdp.actions.canEdit ? (
         <section className={`${surfaceClass} space-y-4 p-6`}>
@@ -393,7 +421,24 @@ function PdpBody({ pdp }: { pdp: PdpRecord }) {
                 {editingIndex === index ? (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Goal Title" value={goal.title} onChange={(value) => setGoals((c) => c.map((item, i) => i === index ? { ...item, title: value } : item))} />
+                    <label className="block text-sm">
+                      <span className="text-xs text-stone-500">Category</span>
+                      <select className={`${fieldClass} mt-1`} value={goal.category} onChange={(e) => setGoals((c) => c.map((item, i) => i === index ? { ...item, category: e.target.value } : item))}>
+                        <option>Technical</option>
+                        <option>Behavioural</option>
+                      </select>
+                    </label>
                     <Field label="Development Area" value={goal.developmentArea} onChange={(value) => setGoals((c) => c.map((item, i) => i === index ? { ...item, developmentArea: value } : item))} />
+                    <label className="block text-sm">
+                      <span className="text-xs text-stone-500">Priority</span>
+                      <select className={`${fieldClass} mt-1`} value={goal.priority} onChange={(e) => setGoals((c) => c.map((item, i) => i === index ? { ...item, priority: e.target.value as GoalDraft["priority"] } : item))}>
+                        <option value="HIGH">High</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="LOW">Low</option>
+                      </select>
+                    </label>
+                    <Field label="Weightage %" value={goal.weightage} onChange={(value) => setGoals((c) => c.map((item, i) => i === index ? { ...item, weightage: value } : item))} />
+                    <Field label="Notes" value={goal.notes} onChange={(value) => setGoals((c) => c.map((item, i) => i === index ? { ...item, notes: value } : item))} />
                     <label className="block text-sm sm:col-span-2">
                       <span className="text-xs text-stone-500">Description</span>
                       <textarea className={`${fieldClass} mt-1 h-24 py-2`} value={goal.objective} onChange={(e) => setGoals((c) => c.map((item, i) => i === index ? { ...item, objective: e.target.value } : item))} />
@@ -444,21 +489,20 @@ function PdpBody({ pdp }: { pdp: PdpRecord }) {
         </section>
       ) : (
         <section className={`${surfaceClass} space-y-3 p-6`}>
-          <h3 className="text-base font-semibold">PDP Goals</h3>
+          <h3 className="text-base font-semibold">Goals ({pdp.goals.length})</h3>
           {pdp.summary ? <p className="text-sm">{pdp.summary}</p> : null}
-          {pdp.goals.map((goal) => (
+          {pdp.goals.map((goal, index) => (
             <div key={goal.id} className="rounded-xl border border-stone-200 px-4 py-3 dark:border-stone-800">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <p className="text-xs text-stone-400">Goal {index + 1}</p>
+              <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-medium">{goal.title}</p>
                   <p className="mt-1 text-sm text-stone-500">{goal.objective}</p>
-                  {goal.developmentArea ? <p className="mt-1 text-xs text-stone-400">{goal.developmentArea}</p> : null}
+                  <p className="mt-2 text-xs uppercase tracking-wide text-stone-400">
+                    {goal.weightage}% · {(goal.priority || "MEDIUM").toLowerCase()} · {goal.category ?? goal.developmentArea ?? "Technical"}
+                  </p>
                 </div>
                 <StatusBadge status={goal.status} />
-              </div>
-              <div className="mt-3">
-                <ProgressBar value={goal.progress} />
-                <p className="mt-1 text-xs text-stone-500">{goal.progress}% · Target {formatDate(goal.dueDate)}</p>
               </div>
             </div>
           ))}
@@ -469,14 +513,40 @@ function PdpBody({ pdp }: { pdp: PdpRecord }) {
         <section className={`${surfaceClass} space-y-3 p-6`}>
           <h3 className="text-base font-semibold">{role === "HR" ? "HR review" : "Employee review"}</h3>
           <p className="text-sm text-stone-500">
-            Review the full PDP first. Approve it, or request changes with comments. This is not the PDP dashboard.
+            {role === "HR"
+              ? "This PDP is waiting for HR approval. Approve it to assign the plan, or request changes with a reason for the supervisor."
+              : "Review the full PDP first. Approve it, or request changes with a clear reason."}
           </p>
-          <textarea className={`${fieldClass} h-28 py-2`} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Optional comment, or describe requested changes" />
+          <textarea
+            className={`${fieldClass} h-28 py-2`}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder={
+              role === "HR"
+                ? "Required if you request changes — describe what the supervisor should update"
+                : "Required if you request changes — describe what should be updated"
+            }
+          />
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => (role === "HR" ? hrReview : employeeReview).mutate({ pdpId: pdp.id, decision: "APPROVE", message })}>
+            <Button
+              type="button"
+              disabled={(role === "HR" ? hrReview : employeeReview).isPending}
+              onClick={() => (role === "HR" ? hrReview : employeeReview).mutate({ pdpId: pdp.id, decision: "APPROVE", message })}
+            >
               Approve PDP
             </Button>
-            <Button type="button" variant="outline" onClick={() => (role === "HR" ? hrReview : employeeReview).mutate({ pdpId: pdp.id, decision: "REQUEST_CHANGES", message })}>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={(role === "HR" ? hrReview : employeeReview).isPending}
+              onClick={() => {
+                if (message.trim().length < 8) {
+                  toast.error("Enter a reason before requesting changes.");
+                  return;
+                }
+                (role === "HR" ? hrReview : employeeReview).mutate({ pdpId: pdp.id, decision: "REQUEST_CHANGES", message });
+              }}
+            >
               Request Changes
             </Button>
           </div>
@@ -518,119 +588,30 @@ function PdpBody({ pdp }: { pdp: PdpRecord }) {
   );
 }
 
-function EmployeePdpDashboard({ pdp, onBack }: { pdp: PdpRecord; onBack: () => void }) {
-  const update = useUpdateGoalProgress();
-  const upload = useUploadPdpEvidence();
-  const completed = pdp.goals.filter((goal) => goal.status === "COMPLETED").length;
-  const inProgress = pdp.goals.filter((goal) => goal.status === "IN_PROGRESS" || goal.status === "UNDER_REVIEW").length;
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [progress, setProgress] = useState<Record<string, number>>(
-    Object.fromEntries(pdp.goals.map((goal) => [goal.id, goal.progress]))
-  );
-
+function PdpTimeline({ pdp }: { pdp: PdpRecord }) {
   return (
-    <div className="mt-5 space-y-6">
-      <Button type="button" variant="outline" size="sm" onClick={onBack}>Back to PDP details</Button>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard label="Overall PDP Progress" value={`${pdp.progressPercent ?? 0}%`} />
-        <MetricCard label="Completed Goals" value={completed} accent="green" />
-        <MetricCard label="Goals In Progress" value={inProgress} accent="orange" />
-        <MetricCard label="Evidence Uploaded" value={pdp.evidence?.length ?? 0} />
-        <MetricCard label="Days Remaining" value={pdp.daysRemaining ?? "—"} />
-      </div>
-      <section className={`${surfaceClass} p-6`}>
-        <h2 className="text-base font-semibold">Overall PDP Progress</h2>
-        <div className="mt-4">
-          <ProgressBar value={pdp.progressPercent ?? 0} tone="green" />
-          <p className="mt-2 text-sm text-stone-500">
-            {completed} completed · {pdp.goals.length - completed} remaining
-          </p>
-        </div>
-      </section>
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold">Goal Progress</h2>
-        {pdp.goals.map((goal) => (
-          <article key={goal.id} className={`${surfaceClass} p-5`}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="font-medium">{goal.title}</p>
-                <p className="mt-1 text-sm text-stone-500">{goal.objective}</p>
-                <p className="mt-1 text-xs text-stone-400">
-                  {goal.developmentArea ?? "Development area"} · Target {formatDate(goal.dueDate)}
-                </p>
-              </div>
-              <StatusBadge status={goal.status} />
-            </div>
-            <div className="mt-4">
-              <ProgressBar value={progress[goal.id] ?? goal.progress} />
-              <p className="mt-1 text-xs text-stone-500">{progress[goal.id] ?? goal.progress}%</p>
-            </div>
-            {pdp.actions.canUpdateProgress ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm">
-                  <span className="text-xs text-stone-500">Update Progress Percentage</span>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    className={`${fieldClass} mt-1`}
-                    value={progress[goal.id] ?? goal.progress}
-                    onChange={(event) => setProgress((current) => ({ ...current, [goal.id]: Number(event.target.value) }))}
-                  />
-                </label>
-                <label className="block text-sm sm:col-span-2">
-                  <span className="text-xs text-stone-500">Progress notes / achievement details</span>
-                  <textarea
-                    className={`${fieldClass} mt-1 h-24 py-2`}
-                    value={notes[goal.id] ?? goal.progressComments ?? ""}
-                    onChange={(event) => setNotes((current) => ({ ...current, [goal.id]: event.target.value }))}
-                  />
-                </label>
-                <div className="flex flex-wrap gap-2 sm:col-span-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={update.isPending}
-                    onClick={() =>
-                      update.mutate({
-                        pdpId: pdp.id,
-                        goalId: goal.id,
-                        progress: progress[goal.id] ?? goal.progress,
-                        notes: notes[goal.id],
-                      })
-                    }
-                  >
-                    Save progress
-                  </Button>
-                  {([
-                    ["DOCUMENT", "Upload Document"],
-                    ["IMAGE", "Upload Image"],
-                    ["CERTIFICATE", "Upload Certificate"],
-                    ["SUPPORTING", "Upload Supporting Evidence"],
-                  ] as const).map(([kind, label]) => (
-                    <label key={kind} className="inline-flex h-9 cursor-pointer items-center rounded-lg border border-stone-300 px-3 text-sm">
-                      {label}
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept={kind === "IMAGE" ? "image/*" : undefined}
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (!file) return;
-                          upload.mutate({ pdpId: pdp.id, goalId: goal.id, file, kind });
-                          event.target.value = "";
-                        }}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </article>
+    <section className={`${surfaceClass} p-6`}>
+      <h3 className="text-sm font-semibold">PDP timeline</h3>
+      <p className="mt-1 text-sm text-stone-500">This shows where you currently are in the PDP workflow.</p>
+      <ol className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {(pdp.timeline ?? []).map((stage) => (
+          <li key={stage.id} className="rounded-xl border border-stone-100 px-3 py-3">
+            <span
+              className={
+                stage.state === "current"
+                  ? "text-[11px] font-semibold uppercase tracking-wide text-amber-700"
+                  : stage.state === "done"
+                    ? "text-[11px] font-semibold uppercase tracking-wide text-emerald-700"
+                    : "text-[11px] uppercase tracking-wide text-stone-400"
+              }
+            >
+              {stage.state}
+            </span>
+            <p className="mt-1 text-sm font-medium">{stage.label}</p>
+          </li>
         ))}
-      </section>
-      <EvidenceTable pdp={pdp} />
-    </div>
+      </ol>
+    </section>
   );
 }
 
@@ -689,6 +670,10 @@ function toDraft(goal: PdpRecord["goals"][number]): GoalDraft {
     startDate: goal.startDate ? String(goal.startDate).slice(0, 10) : "",
     dueDate: goal.dueDate ? String(goal.dueDate).slice(0, 10) : "",
     measurementKpi: goal.measurementKpi ?? "",
+    notes: goal.notes ?? "",
+    category: goal.category ?? "Technical",
+    priority: (goal.priority as GoalDraft["priority"]) || "MEDIUM",
+    weightage: String(goal.weightage ?? ""),
   };
 }
 

@@ -3,6 +3,7 @@ import { AppError } from "../utils/errors.js";
 import {
   addPdpEvidence,
   assignPdp,
+  addGoalComment,
   createPdp,
   downloadPdpEvidence,
   employeeReviewPdp,
@@ -22,6 +23,7 @@ import type {
   PdpListQuery,
   PdpRedirectInput,
   SavePdpDraftInput,
+  GoalCommentInput,
   UpdateGoalProgressInput,
 } from "../validations/pdp.validation.js";
 
@@ -181,6 +183,22 @@ export async function downloadPdpEvidenceRecord(req: Request, res: Response, nex
     if (!req.user?.id) throw new AppError("Authentication required", 401);
     const file = await downloadPdpEvidence(req.user.id, String(req.params.evidenceId));
     res.download(file.fullPath, file.fileName);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function addGoalCommentRecord(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user?.id) throw new AppError("Authentication required", 401);
+    const body = req.body as GoalCommentInput;
+    const pdp = await addGoalComment(
+      req.user.id,
+      String(req.params.pdpId),
+      String(req.params.goalId),
+      body.message
+    );
+    res.status(201).json({ success: true, pdp });
   } catch (error) {
     next(error);
   }

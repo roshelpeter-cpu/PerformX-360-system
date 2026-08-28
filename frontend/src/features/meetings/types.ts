@@ -136,6 +136,7 @@ export interface PlanningMeeting {
     canAddNotes: boolean;
     canReviewReschedule: boolean;
     canHrConfirm?: boolean;
+    canManage?: boolean;
   };
 }
 

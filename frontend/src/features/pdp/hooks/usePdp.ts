@@ -15,6 +15,7 @@ import {
   submitPdpRequest,
   updateGoalProgressRequest,
   uploadPdpEvidenceRequest,
+  addGoalCommentRequest,
 } from "../services/pdp.api";
 import type { GoalDraft } from "../types";
 
@@ -75,7 +76,7 @@ export function useSubmitPdp() {
     mutationFn: submitPdpRequest,
     onSuccess: () => {
       invalidate(queryClient);
-      toast.success("PDP submitted for employee and HR review");
+      toast.success("PDP submitted for employee approval");
     },
   });
 }
@@ -89,6 +90,7 @@ export function useEmployeeReviewPdp() {
       invalidate(queryClient);
       toast.success("Your PDP review was saved");
     },
+    onError: (error: Error) => toast.error(error.message),
   });
 }
 
@@ -97,10 +99,11 @@ export function useHrReviewPdp() {
   return useMutation({
     mutationFn: ({ pdpId, ...body }: { pdpId: string; decision: "APPROVE" | "REQUEST_CHANGES"; message?: string }) =>
       hrReviewPdpRequest(pdpId, body),
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidate(queryClient);
-      toast.success("HR review saved");
+      toast.success(result.pdp.status === "ASSIGNED" ? "PDP approved and assigned" : "HR review saved");
     },
+    onError: (error: Error) => toast.error(error.message),
   });
 }
 
@@ -175,6 +178,18 @@ export function useReviewPdpEvidence() {
     onSuccess: () => {
       invalidate(queryClient);
       toast.success("Evidence marked as reviewed");
+    },
+  });
+}
+
+export function useAddGoalComment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ pdpId, goalId, message }: { pdpId: string; goalId: string; message: string }) =>
+      addGoalCommentRequest(pdpId, goalId, message),
+    onSuccess: () => {
+      invalidate(queryClient);
+      toast.success("Comment added");
     },
   });
 }

@@ -2,15 +2,19 @@ import { useState, type ReactNode } from "react";
 import { NavLink, Link } from "react-router-dom";
 import {
   Bell,
+  BarChart3,
   CalendarRange,
   ChevronDown,
+  ClipboardCheck,
   FileText,
   LayoutDashboard,
   LogOut,
+  Medal,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Search,
+  Trophy,
   Users,
 } from "lucide-react";
 import ThemeToggle from "@/components/common/ThemeToggle";
@@ -96,6 +100,19 @@ function navSectionsForRole(role: string | undefined) {
         items: [
           { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange, end: false },
           { label: "PDP Management", to: "/hr/pdp", icon: FileText, end: false },
+          { label: "Performance Evaluation", to: "/hr/evaluations", icon: ClipboardCheck, end: false },
+          { label: "Peer Review Management", to: "/hr/peer-reviews", icon: Users, end: true },
+        ],
+      },
+      {
+        heading: "Recognition & PIP",
+        items: [
+          { label: "Recognition and Rewards", to: "/hr/recognition", icon: Trophy, end: true },
+          { label: "Promotion Management", to: "/hr/promotions", icon: Medal, end: true },
+          { label: "Awards", to: "/hr/awards", icon: Trophy, end: true },
+          { label: "PIP Management", to: "/hr/pip", icon: FileText, end: true },
+          { label: "Appraisal Review Requests", to: "/hr/review-requests", icon: ClipboardCheck, end: true },
+          { label: "Reporting", to: "/hr/reports", icon: BarChart3, end: true },
         ],
       },
       {
@@ -115,7 +132,14 @@ function navSectionsForRole(role: string | undefined) {
       },
       {
         heading: "PDP MANAGEMENT",
-        items: [{ label: "PDP Creation", to: "/supervisor/pdp", icon: FileText, end: false }],
+        items: [{ label: "PDP Creation and Management", to: "/supervisor/pdp", icon: FileText, end: false }],
+      },
+      {
+        heading: "EVALUATION",
+        items: [
+          { label: "Team Evaluation", to: "/supervisor/evaluations", icon: ClipboardCheck, end: false },
+          { label: "Team PIP", to: "/supervisor/pip", icon: FileText, end: true },
+        ],
       },
       {
         heading: "Meeting Management",
@@ -133,6 +157,15 @@ function navSectionsForRole(role: string | undefined) {
         items: [{ label: "My PDP", to: "/employee/pdp", icon: FileText, end: false }],
       },
       {
+        heading: "EVALUATION",
+        items: [
+          { label: "Self Review", to: "/employee/self-review", icon: ClipboardCheck, end: true },
+          { label: "Peer Reviews", to: "/employee/peer-reviews", icon: Users, end: true },
+          { label: "Final Results", to: "/employee/results", icon: Trophy, end: true },
+          { label: "My PIP", to: "/employee/pip", icon: FileText, end: true },
+        ],
+      },
+      {
         heading: "Meeting Management",
         items: [planningMeetings, followUpMeetings, otherMeetings, meetingCalendar],
       },
@@ -140,7 +173,13 @@ function navSectionsForRole(role: string | undefined) {
     ];
   }
 
-  return [{ heading: "", items: [dashboard, notifications] }];
+  return [
+    { heading: "", items: [dashboard, notifications] },
+    {
+      heading: "INSIGHTS",
+      items: [{ label: "Reporting", to: "/leadership/reports", icon: BarChart3, end: true }],
+    },
+  ];
 }
 
 export default function DashboardLayout({ children }: Props) {
