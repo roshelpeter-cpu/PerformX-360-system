@@ -45,6 +45,22 @@ export function formatBatchPeriodLabel(
   return `${startMonth} – ${endMonth}`;
 }
 
+export function formatTimeRange(start: string | Date, end?: string | Date | null) {
+  const startDate = typeof start === "string" ? new Date(start) : start;
+  if (Number.isNaN(startDate.getTime())) return "—";
+  const startLabel = startDate.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  if (!end) return startLabel;
+  const endDate = typeof end === "string" ? new Date(end) : end;
+  if (Number.isNaN(endDate.getTime())) return startLabel;
+  return `${startLabel} – ${endDate.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  })}`;
+}
+
 export function formatDateTime(value: string | Date | null | undefined) {
   if (!value) return "—";
   const date = typeof value === "string" ? new Date(value) : value;

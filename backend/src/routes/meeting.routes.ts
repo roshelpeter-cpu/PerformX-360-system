@@ -3,22 +3,31 @@ import { authenticateUser } from "../middlewares/authenticate.js";
 import { validateBody, validateParams, validateQuery } from "../middlewares/validate.js";
 import {
   confirmMeeting,
+  confirmMeetingByHr,
+  getCalendar,
   getMeeting,
   listEmployeesForScheduling,
+  listFollowUpMeetings,
   listMeetings,
+  listOtherMeetings,
   requestReschedule,
   reviewReschedule,
   saveNotes,
+  scheduleFollowUpMeeting,
   scheduleMeeting,
+  scheduleOtherMeetingRecord,
 } from "../controllers/meeting.controller.js";
 import {
   confirmMeetingSchema,
+  meetingCalendarQuerySchema,
   meetingIdParamsSchema,
+  otherMeetingListQuerySchema,
   planningMeetingListQuerySchema,
   rescheduleRequestSchema,
   rescheduleReviewSchema,
   savePlanningNotesSchema,
   schedulePlanningMeetingSchema,
+  scheduleTypedMeetingSchema,
 } from "../validations/meeting.validation.js";
 
 const meetingRouter = Router();
@@ -31,6 +40,27 @@ meetingRouter.get(
   listMeetings
 );
 meetingRouter.get("/planning/employees", listEmployeesForScheduling);
+meetingRouter.get("/calendar", validateQuery(meetingCalendarQuerySchema), getCalendar);
+meetingRouter.get(
+  "/follow-up",
+  validateQuery(otherMeetingListQuerySchema),
+  listFollowUpMeetings
+);
+meetingRouter.post(
+  "/follow-up",
+  validateBody(scheduleTypedMeetingSchema),
+  scheduleFollowUpMeeting
+);
+meetingRouter.get(
+  "/other",
+  validateQuery(otherMeetingListQuerySchema),
+  listOtherMeetings
+);
+meetingRouter.post(
+  "/other",
+  validateBody(scheduleTypedMeetingSchema),
+  scheduleOtherMeetingRecord
+);
 meetingRouter.get(
   "/planning/:meetingId",
   validateParams(meetingIdParamsSchema),
@@ -46,6 +76,11 @@ meetingRouter.post(
   validateParams(meetingIdParamsSchema),
   validateBody(confirmMeetingSchema),
   confirmMeeting
+);
+meetingRouter.post(
+  "/planning/:meetingId/hr-confirm",
+  validateParams(meetingIdParamsSchema),
+  confirmMeetingByHr
 );
 meetingRouter.post(
   "/planning/:meetingId/reschedule-request",

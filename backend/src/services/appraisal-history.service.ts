@@ -64,6 +64,7 @@ export async function listHistoricalCycles(
   const cycles = await prisma.appraisalCycle.findMany({
     where: {
       status: "COMPLETED",
+      startDate: { gte: new Date("2023-01-01") },
       OR: [
         { batchAssignments: { some: { employeeId } } },
         { employeeProgress: { some: { employeeId } } },

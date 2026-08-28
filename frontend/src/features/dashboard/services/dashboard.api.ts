@@ -108,6 +108,47 @@ export interface DashboardTeamMember {
   batch: { id: string; name: string; batchNumber: number } | null;
 }
 
+export interface DashboardOverview {
+  totalEmployees: number;
+  pdpsInProgress: number;
+  meetingsToday: number;
+  completedMeetings: number;
+  overallProgress: number;
+  meetingsByType: {
+    planning: number;
+    followUp: number;
+    other: number;
+    cancelled: number;
+    total: number;
+  };
+  pdpStatus: {
+    draft: number;
+    waitingEmployee: number;
+    waitingHr: number;
+    approved: number;
+    completed: number;
+  };
+  upcomingMeetings: Array<{
+    id: string;
+    title: string;
+    type: string;
+    status: string;
+    scheduledAt: string;
+    endAt: string;
+    location: string | null;
+    employee: { id: string; name: string; employeeId: string };
+    supervisor: { id: string; name: string } | null;
+    participants: Array<{ id: string; name: string }>;
+  }>;
+  calendarDates: Array<{ date: string; type: string }>;
+  tasks: {
+    waitingHr: number;
+    changeRequests: number;
+    rescheduleRequests: number;
+    needsScheduling: number;
+  };
+}
+
 export interface DashboardPayload {
   role: DashboardProfile["role"];
   profile: DashboardProfile;
@@ -145,6 +186,7 @@ export interface DashboardPayload {
   }>;
   departments?: Array<{ id: string; name: string; employeeCount: number }>;
   pendingPasswordResets?: number;
+  overview?: DashboardOverview;
   notifications: DashboardNotification[];
   unreadCount: number;
   progress?: EmployeeAppraisalProgress;

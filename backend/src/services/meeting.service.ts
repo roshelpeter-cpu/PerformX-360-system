@@ -11,6 +11,7 @@ import {
   MeetingStatus,
   MeetingType,
   NotificationType,
+  PdpStatus,
   Prisma,
   RescheduleRequestStatus,
   Role,
@@ -19,11 +20,13 @@ import { prisma } from "../lib/prisma.js";
 import { AppError } from "../utils/errors.js";
 import { createNotification, notifyAllHrUsers } from "./notification.service.js";
 import type {
+  MeetingCalendarQuery,
   PlanningMeetingListQuery,
   RescheduleRequestInput,
   RescheduleReviewInput,
   SavePlanningNotesInput,
   SchedulePlanningMeetingInput,
+  ScheduleTypedMeetingInput,
 } from "../validations/meeting.validation.js";
 
 const ACTIVE_MEETING_STATUSES: MeetingStatus[] = [
@@ -132,6 +135,10 @@ function serializeMeeting(meeting: MeetingRecord, viewerId: string, viewerRole: 
   const pendingReschedule = meeting.rescheduleRequests.find(
     (item) => item.status === RescheduleRequestStatus.PENDING
   );
+  const review = meeting.planningReview;
+  const bothConfirmed =
+    employeeParticipant?.response === MeetingParticipantResponse.ACCEPTED &&
+    supervisorParticipant?.response === MeetingParticipantResponse.ACCEPTED;
 
   const canConfirm =
     !completed &&
@@ -152,9 +159,17 @@ function serializeMeeting(meeting: MeetingRecord, viewerId: string, viewerRole: 
   const canReviewReschedule =
     viewerRole === Role.HR && Boolean(pendingReschedule);
 
+  const canHrConfirm =
+    viewerRole === Role.HR &&
+    !completed &&
+    bothConfirmed &&
+    meeting.status !== MeetingStatus.CONFIRMED;
+
   return {
     id: meeting.id,
     type: meeting.type,
+    followUpSlot: meeting.followUpSlot,
+    isAdditionalFollowUp: meeting.isAdditionalFollowUp,
     title: meeting.title,
     description: meeting.description,
     status: meeting.status,
@@ -189,23 +204,37 @@ function serializeMeeting(meeting: MeetingRecord, viewerId: string, viewerRole: 
           createdAt: pendingReschedule.createdAt,
         }
       : null,
-    // Notes are only returned after the meeting is completed.
+    bothConfirmed,
     notes: completed
-      ? meeting.notes
+      ? meeting.notes || review
         ? {
-            discussionSummary: meeting.notes.discussionSummary,
-            keyPoints: meeting.notes.keyPoints,
-            decisionsMade: meeting.notes.decisionsMade,
-            actionItems: meeting.notes.actionItems,
-            nextSteps: meeting.notes.nextSteps,
-            additionalComments: meeting.notes.additionalComments,
-            previousAppraisalReviewed: meeting.planningReview?.previousAppraisalReviewed ?? null,
-            previousAppraisalFindings: meeting.planningReview?.previousAppraisalFindings ?? null,
-            employeeStrengths: meeting.planningReview?.employeeStrengths ?? null,
-            employeeWeaknesses: meeting.planningReview?.employeeWeaknesses ?? null,
-            performanceObservations: meeting.planningReview?.performanceObservations ?? null,
-            agreedOutcomes: meeting.planningReview?.agreedOutcomes ?? null,
-            updatedAt: meeting.notes.updatedAt,
+            discussionSummary: meeting.notes?.discussionSummary ?? "",
+            keyPoints: meeting.notes?.keyPoints ?? "",
+            decisionsMade: meeting.notes?.decisionsMade ?? review?.decisionsMade ?? "",
+            actionItems: meeting.notes?.actionItems ?? "",
+            nextSteps: meeting.notes?.nextSteps ?? "",
+            previousAppraisalReviewed: review?.previousAppraisalReviewed ?? null,
+            previousAppraisalFindings: review?.previousAppraisalFindings ?? null,
+            previousAppraisalOutcome: review?.previousAppraisalObservations ?? null,
+            previousPerformance: review?.performanceObservations ?? null,
+            keyAchievements: review?.previousAppraisalFindings ?? null,
+            previousPdpReviewed:
+              [review?.previousPdpObjectives, review?.previousPdpProgress, review?.previousPdpObservations]
+                .filter(Boolean)
+                .join("\n") || null,
+            previousPdpCompletion: review?.previousPdpProgress ?? null,
+            completedGoals: review?.previousPdpCompleted ?? null,
+            incompleteGoals: review?.previousPdpIncomplete ?? null,
+            carriedForward: review?.continueFromPreviousPdp ?? null,
+            employeeStrengths: review?.employeeStrengths ?? null,
+            employeeWeaknesses: review?.employeeWeaknesses ?? null,
+            departmentObjectives: review?.departmentObjectivesNotes ?? null,
+            companyObjectives: review?.companyObjectivesNotes ?? null,
+            developmentNeeds: review?.developmentNeedsSummary ?? null,
+            performanceObservations: review?.performanceObservations ?? null,
+            agreedOutcomes: review?.agreedOutcomes ?? null,
+            additionalComments: meeting.notes?.additionalComments ?? review?.additionalComments ?? null,
+            updatedAt: meeting.notes?.updatedAt ?? review?.updatedAt ?? meeting.updatedAt,
           }
         : null
       : null,
@@ -214,6 +243,7 @@ function serializeMeeting(meeting: MeetingRecord, viewerId: string, viewerRole: 
       canRequestReschedule,
       canAddNotes,
       canReviewReschedule,
+      canHrConfirm,
     },
   };
 }
@@ -223,8 +253,8 @@ async function loadMeeting(meetingId: string) {
     where: { id: meetingId },
     include: meetingInclude,
   });
-  if (!meeting || meeting.type !== MeetingType.PERFORMANCE_PLANNING) {
-    throw new AppError("Performance planning meeting not found", 404);
+  if (!meeting) {
+    throw new AppError("Meeting not found", 404);
   }
   return meeting;
 }
@@ -394,18 +424,66 @@ export async function listPlanningMeetings(
     select: { scheduledAt: true, status: true },
   });
 
-  const teamMembers =
+  const teamRows =
     user.role === Role.SUPERVISOR && cycle
       ? await prisma.employeeSupervisorAssignment.findMany({
-          where: { cycleId: cycle.id, supervisorId: user.id },
+          where: { cycleId: cycle.id, supervisorId: user.id, employee: { role: Role.EMPLOYEE } },
           include: {
             employee: {
-              select: { id: true, employeeId: true, name: true },
+              select: { id: true, employeeId: true, name: true, jobTitle: true },
             },
           },
           orderBy: { employee: { name: "asc" } },
         })
       : [];
+
+  const teamMeetings =
+    teamRows.length > 0 && cycle
+      ? await prisma.meeting.findMany({
+          where: {
+            cycleId: cycle.id,
+            type: MeetingType.PERFORMANCE_PLANNING,
+            employeeId: { in: teamRows.map((row) => row.employee.id) },
+            status: { not: MeetingStatus.CANCELLED },
+          },
+          include: meetingInclude,
+        })
+      : [];
+  const teamMeetingByEmployee = new Map(
+    teamMeetings.map((item) => [item.employeeId, item])
+  );
+
+  let needsScheduling = 0;
+  if (user.role === Role.HR && cycle) {
+    const assignedCount = await prisma.employeeBatchAssignment.count({
+      where: { cycleId: cycle.id, employee: { role: Role.EMPLOYEE } },
+    });
+    const scheduledCount = await prisma.meeting.count({
+      where: {
+        cycleId: cycle.id,
+        type: MeetingType.PERFORMANCE_PLANNING,
+        status: { not: MeetingStatus.CANCELLED },
+      },
+    });
+    needsScheduling = Math.max(0, assignedCount - scheduledCount);
+  }
+
+  const confirmationQueue = meetings
+    .filter(
+      (item) =>
+        item.status !== MeetingStatus.COMPLETED &&
+        (item.status === MeetingStatus.RESCHEDULE_REQUESTED ||
+          item.participants.some((p) => p.response === MeetingParticipantResponse.PENDING) ||
+          (item.participants
+            .filter(
+              (p) =>
+                p.participantRole === MeetingParticipantRole.EMPLOYEE ||
+                p.participantRole === MeetingParticipantRole.SUPERVISOR
+            )
+            .every((p) => p.response === MeetingParticipantResponse.ACCEPTED) &&
+            item.status !== MeetingStatus.CONFIRMED))
+    )
+    .slice(0, 5);
 
   return {
     cycle: cycle
@@ -416,9 +494,42 @@ export async function listPlanningMeetings(
       completed: completedCount,
       pendingRequests,
       total: upcomingCount + completedCount,
+      needsScheduling,
     },
-    teamMembers: teamMembers.map((row) => row.employee),
+    teamMembers: teamRows.map((row) => {
+      const meeting = teamMeetingByEmployee.get(row.employee.id);
+      let planningStatus:
+        | "completed"
+        | "scheduled"
+        | "needs_scheduling"
+        | "awaiting_confirmation"
+        | "reschedule_requested" = "needs_scheduling";
+      if (meeting?.status === MeetingStatus.COMPLETED) planningStatus = "completed";
+      else if (meeting?.status === MeetingStatus.RESCHEDULE_REQUESTED) {
+        planningStatus = "reschedule_requested";
+      } else if (meeting) {
+        const emp = meeting.participants.find(
+          (item) => item.participantRole === MeetingParticipantRole.EMPLOYEE
+        );
+        const sup = meeting.participants.find(
+          (item) => item.participantRole === MeetingParticipantRole.SUPERVISOR
+        );
+        planningStatus =
+          emp?.response === MeetingParticipantResponse.ACCEPTED &&
+          sup?.response === MeetingParticipantResponse.ACCEPTED
+            ? "awaiting_confirmation"
+            : "scheduled";
+      }
+      return {
+        ...row.employee,
+        planningStatus,
+        meeting: meeting ? serializeMeeting(meeting, user.id, user.role) : null,
+      };
+    }),
     meetings: meetings.map((meeting) =>
+      serializeMeeting(meeting, user.id, user.role)
+    ),
+    confirmationQueue: confirmationQueue.map((meeting) =>
       serializeMeeting(meeting, user.id, user.role)
     ),
     nextSevenDays: upcomingMeetings.map((meeting) =>
@@ -436,7 +547,12 @@ export async function getPlanningMeeting(userId: string, meetingId: string) {
   const user = await requireUser(userId);
   const meeting = await loadMeeting(meetingId);
   await assertCanViewMeeting(meeting, user);
-  return serializeMeeting(meeting, user.id, user.role);
+  const serialized = serializeMeeting(meeting, user.id, user.role);
+  const previousAppraisal = await loadPreviousAppraisal(
+    meeting.employeeId,
+    meeting.cycleId
+  );
+  return { ...serialized, previousAppraisal };
 }
 
 export async function listSchedulableEmployees(userId: string) {
@@ -533,8 +649,12 @@ export async function schedulePlanningMeeting(
     throw new AppError("Only HR can schedule performance planning meetings", 403);
   }
 
-  const cycle = await getActiveCycle();
-  if (!cycle) throw new AppError("There is no active appraisal cycle", 400);
+  const cycle = input.cycleId
+    ? await prisma.appraisalCycle.findUnique({ where: { id: input.cycleId } })
+    : await getActiveCycle();
+  if (!cycle || (cycle.status !== "ACTIVE" && cycle.status !== "UPCOMING")) {
+    throw new AppError("Select a current or upcoming appraisal cycle", 400);
+  }
 
   const assignment = await prisma.employeeBatchAssignment.findUnique({
     where: {
@@ -662,14 +782,10 @@ export async function confirmPlanningMeeting(
     .every((item) => item.response === MeetingParticipantResponse.ACCEPTED);
 
   if (allAccepted) {
-    await prisma.meeting.update({
-      where: { id: meetingId },
-      data: { status: MeetingStatus.CONFIRMED },
-    });
     await notifyMeetingParties({
-      type: NotificationType.MEETING_CONFIRMED,
-      title: "Meeting confirmed",
-      message: `${meeting.title} has been confirmed by all participants.`,
+      type: NotificationType.MEETING_ALL_ACCEPTED,
+      title: "Meeting confirmation required",
+      message: `${meeting.title} has been confirmed by the employee and supervisor. HR confirmation is still required.`,
       meetingId,
       employeeId: meeting.employeeId,
       supervisorId: meeting.supervisorId,
@@ -862,6 +978,9 @@ export async function savePlanningMeetingNotes(
   }
 
   const meeting = await loadMeeting(meetingId);
+  if (meeting.type !== MeetingType.PERFORMANCE_PLANNING) {
+    throw new AppError("Detailed notes are recorded on Performance Planning Meetings", 400);
+  }
   if (meeting.supervisorId !== user.id) {
     throw new AppError("You can only add notes for employees you supervise", 403);
   }
@@ -895,9 +1014,23 @@ export async function savePlanningMeetingNotes(
         meetingId,
         updatedById: user.id,
         previousAppraisalReviewed: input.previousAppraisalReviewed ?? "",
-        previousAppraisalFindings: input.previousAppraisalFindings ?? "",
+        previousAppraisalFindings: input.previousAppraisalFindings ?? input.keyAchievements ?? "",
+        previousAppraisalObservations: [
+          input.previousAppraisalOutcome,
+          input.previousPerformance,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        previousPdpObjectives: input.previousPdpReviewed ?? "",
+        previousPdpProgress: input.previousPdpCompletion ?? input.previousPdpReviewed ?? "",
+        previousPdpCompleted: input.completedGoals ?? "",
+        previousPdpIncomplete: input.incompleteGoals ?? "",
+        continueFromPreviousPdp: input.carriedForward ?? "",
         employeeStrengths: input.employeeStrengths ?? "",
         employeeWeaknesses: input.employeeWeaknesses ?? "",
+        departmentObjectivesNotes: input.departmentObjectives ?? "",
+        companyObjectivesNotes: input.companyObjectives ?? "",
+        developmentNeedsSummary: input.developmentNeeds ?? "",
         performanceObservations: input.performanceObservations ?? "",
         agreedOutcomes: input.agreedOutcomes ?? "",
         decisionsMade: input.decisionsMade,
@@ -906,9 +1039,23 @@ export async function savePlanningMeetingNotes(
       update: {
         updatedById: user.id,
         previousAppraisalReviewed: input.previousAppraisalReviewed ?? "",
-        previousAppraisalFindings: input.previousAppraisalFindings ?? "",
+        previousAppraisalFindings: input.previousAppraisalFindings ?? input.keyAchievements ?? "",
+        previousAppraisalObservations: [
+          input.previousAppraisalOutcome,
+          input.previousPerformance,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+        previousPdpObjectives: input.previousPdpReviewed ?? "",
+        previousPdpProgress: input.previousPdpCompletion ?? input.previousPdpReviewed ?? "",
+        previousPdpCompleted: input.completedGoals ?? "",
+        previousPdpIncomplete: input.incompleteGoals ?? "",
+        continueFromPreviousPdp: input.carriedForward ?? "",
         employeeStrengths: input.employeeStrengths ?? "",
         employeeWeaknesses: input.employeeWeaknesses ?? "",
+        departmentObjectivesNotes: input.departmentObjectives ?? "",
+        companyObjectivesNotes: input.companyObjectives ?? "",
+        developmentNeedsSummary: input.developmentNeeds ?? "",
         performanceObservations: input.performanceObservations ?? "",
         agreedOutcomes: input.agreedOutcomes ?? "",
         decisionsMade: input.decisionsMade,
@@ -956,3 +1103,581 @@ export async function savePlanningMeetingNotes(
   const updated = await loadMeeting(meetingId);
   return serializeMeeting(updated, user.id, user.role);
 }
+
+async function loadPreviousAppraisal(employeeId: string, cycleId: string | null) {
+  if (!cycleId) return null;
+  const current = await prisma.appraisalCycle.findUnique({
+    where: { id: cycleId },
+    select: { startDate: true },
+  });
+  if (!current) return null;
+  const previous = await prisma.appraisalCycle.findFirst({
+    where: {
+      status: "COMPLETED",
+      startDate: { lt: current.startDate, gte: new Date("2023-01-01") },
+      OR: [
+        { appraisalOutcomes: { some: { employeeId } } },
+        { pdps: { some: { employeeId } } },
+      ],
+    },
+    orderBy: { startDate: "desc" },
+    select: { id: true, name: true, startDate: true, endDate: true },
+  });
+  if (!previous) return null;
+
+  const [outcome, pdp, reviews] = await Promise.all([
+    prisma.appraisalOutcome.findUnique({
+      where: { cycleId_employeeId: { cycleId: previous.id, employeeId } },
+    }),
+    prisma.personalDevelopmentPlan.findUnique({
+      where: { cycleId_employeeId: { cycleId: previous.id, employeeId } },
+      include: { goals: { orderBy: { sortOrder: "asc" }, take: 12 } },
+    }),
+    prisma.appraisalReview.findMany({
+      where: { cycleId: previous.id, employeeId },
+      orderBy: { completedAt: "asc" },
+    }),
+  ]);
+
+  return {
+    cycle: previous,
+    outcome: outcome
+      ? {
+          overallResult: outcome.overallResult,
+          ratingBand: outcome.ratingBand,
+          overallScore: outcome.overallScore,
+          awardTitle: outcome.awardTitle,
+          bonusAmount: outcome.bonusAmount,
+          promotionTitle: outcome.promotionTitle,
+          pipRequired: outcome.pipRequired,
+          pipSummary: outcome.pipSummary,
+        }
+      : null,
+    pdp: pdp
+      ? {
+          status: pdp.status,
+          summary: pdp.summary,
+          goals: pdp.goals.map((goal) => ({
+            id: goal.id,
+            title: goal.title,
+            objective: goal.objective,
+            progress: goal.progress,
+            status: goal.status,
+          })),
+        }
+      : null,
+    reviews: reviews.map((review) => ({
+      kind: review.kind,
+      score: review.score,
+      comments: review.comments,
+    })),
+  };
+}
+
+export async function confirmPlanningMeetingByHr(userId: string, meetingId: string) {
+  const user = await requireUser(userId);
+  if (user.role !== Role.HR) {
+    throw new AppError("Only HR can confirm a scheduled planning meeting", 403);
+  }
+
+  const meeting = await loadMeeting(meetingId);
+  const employeeAccepted =
+    meeting.participants.find(
+      (item) => item.participantRole === MeetingParticipantRole.EMPLOYEE
+    )?.response === MeetingParticipantResponse.ACCEPTED;
+  const supervisorAccepted =
+    meeting.participants.find(
+      (item) => item.participantRole === MeetingParticipantRole.SUPERVISOR
+    )?.response === MeetingParticipantResponse.ACCEPTED;
+
+  if (!employeeAccepted || !supervisorAccepted) {
+    throw new AppError("Both the employee and supervisor must confirm first", 400);
+  }
+  if (meeting.status === MeetingStatus.COMPLETED) {
+    throw new AppError("This meeting has already been completed", 400);
+  }
+
+  await prisma.meeting.update({
+    where: { id: meetingId },
+    data: { status: MeetingStatus.CONFIRMED },
+  });
+
+  await notifyMeetingParties({
+    type: NotificationType.MEETING_CONFIRMED,
+    title: "Meeting confirmed",
+    message: `HR confirmed ${meeting.title}.`,
+    meetingId,
+    employeeId: meeting.employeeId,
+    supervisorId: meeting.supervisorId,
+  });
+
+  const updated = await loadMeeting(meetingId);
+  return serializeMeeting(updated, user.id, user.role);
+}
+
+export async function listTypedMeetings(
+  userId: string,
+  types: MeetingType[],
+  query: {
+    page?: number;
+    pageSize?: number;
+    employeeId?: string;
+    cycleId?: string;
+    pdpStartDate?: string;
+    from?: string;
+    to?: string;
+    status?: string;
+    tab?: "schedule" | "history" | "all";
+  } = {}
+) {
+  const user = await requireUser(userId);
+  const page = query.page ?? 1;
+  const pageSize = query.pageSize ?? 10;
+  const now = new Date();
+  const cycle = query.cycleId
+    ? await prisma.appraisalCycle.findUnique({ where: { id: query.cycleId } })
+    : await getActiveCycle();
+  const where: Prisma.MeetingWhereInput = {
+    type: { in: types },
+  };
+  if (user.role === Role.EMPLOYEE) where.employeeId = user.id;
+  else if (user.role === Role.SUPERVISOR) where.supervisorId = user.id;
+  if (query.employeeId) where.employeeId = query.employeeId;
+  if (cycle) where.cycleId = cycle.id;
+  if (query.status) where.status = query.status as MeetingStatus;
+  if (query.from || query.to) {
+    where.scheduledAt = {
+      ...(query.from ? { gte: new Date(query.from) } : {}),
+      ...(query.to ? { lte: new Date(query.to) } : {}),
+    };
+  }
+  if (query.tab === "history") {
+    where.status = { in: [MeetingStatus.COMPLETED, MeetingStatus.CANCELLED] };
+  } else if (query.tab === "schedule") {
+    where.status = { in: ACTIVE_MEETING_STATUSES };
+  }
+
+  const statsWhere: Prisma.MeetingWhereInput = {
+    type: { in: types },
+    ...(user.role === Role.EMPLOYEE ? { employeeId: user.id } : {}),
+    ...(user.role === Role.SUPERVISOR ? { supervisorId: user.id } : {}),
+    ...(query.employeeId ? { employeeId: query.employeeId } : {}),
+    ...(cycle ? { cycleId: cycle.id } : {}),
+  };
+
+  const pdpWhere: Prisma.PersonalDevelopmentPlanWhereInput = {
+    status: { in: [PdpStatus.ASSIGNED, PdpStatus.COMPLETED, PdpStatus.READY_FOR_ASSIGNMENT, PdpStatus.APPROVED] },
+    ...(cycle ? { cycleId: cycle.id } : {}),
+    ...(user.role === Role.SUPERVISOR ? { supervisorId: user.id } : {}),
+    ...(user.role === Role.EMPLOYEE ? { employeeId: user.id } : {}),
+  };
+  if (query.pdpStartDate) {
+    const start = new Date(`${query.pdpStartDate}T00:00:00`);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 1);
+    pdpWhere.OR = [
+      { assignedAt: { gte: start, lt: end } },
+      { AND: [{ assignedAt: null }, { createdAt: { gte: start, lt: end } }] },
+    ];
+  }
+
+  const pdpRows = await prisma.personalDevelopmentPlan.findMany({
+    where: pdpWhere,
+    select: {
+      id: true,
+      status: true,
+      assignedAt: true,
+      createdAt: true,
+      employeeId: true,
+      supervisorId: true,
+      employee: {
+        select: {
+          id: true,
+          employeeId: true,
+          name: true,
+          jobTitle: true,
+          department: { select: { id: true, name: true } },
+        },
+      },
+      supervisor: { select: { id: true, employeeId: true, name: true } },
+      cycle: { select: { id: true, name: true } },
+    },
+    orderBy: { employee: { name: "asc" } },
+  });
+  const seenEmployees = new Set<string>();
+  const pdpEmployees = pdpRows.filter((item) => {
+    if (seenEmployees.has(item.employeeId)) return false;
+    seenEmployees.add(item.employeeId);
+    return true;
+  });
+  if (query.pdpStartDate && !query.employeeId) {
+    const ids = pdpEmployees.map((item) => item.employeeId);
+    where.employeeId = { in: ids.length > 0 ? ids : ["__none__"] };
+    statsWhere.employeeId = where.employeeId;
+  }
+
+  const [total, meetings, allForStats] = await Promise.all([
+    prisma.meeting.count({ where }),
+    prisma.meeting.findMany({
+      where,
+      include: meetingInclude,
+      orderBy: { scheduledAt: query.tab === "history" ? "desc" : "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.meeting.findMany({
+      where: statsWhere,
+      select: {
+        id: true,
+        status: true,
+        scheduledAt: true,
+        employeeId: true,
+        followUpSlot: true,
+      },
+    }),
+  ]);
+
+  const stats = {
+    total: allForStats.length,
+    completed: allForStats.filter((item) => item.status === MeetingStatus.COMPLETED).length,
+    upcoming: allForStats.filter(
+      (item) =>
+        item.scheduledAt >= now &&
+        item.status !== MeetingStatus.COMPLETED &&
+        item.status !== MeetingStatus.CANCELLED
+    ).length,
+    cancelled: allForStats.filter((item) => item.status === MeetingStatus.CANCELLED).length,
+    rescheduled: allForStats.filter(
+      (item) =>
+        item.status === MeetingStatus.RESCHEDULED ||
+        item.status === MeetingStatus.RESCHEDULE_REQUESTED
+    ).length,
+    scheduled: allForStats.filter((item) => item.status === MeetingStatus.SCHEDULED).length,
+  };
+
+  const selectedEmployee = query.employeeId
+    ? pdpEmployees.find((item) => item.employeeId === query.employeeId) ?? null
+    : null;
+
+  return {
+    meetings: meetings.map((meeting) => serializeMeeting(meeting, user.id, user.role)),
+    stats,
+    pdpEmployees: pdpEmployees.map((item) => ({
+      ...item.employee,
+      pdpStatus: item.status,
+      pdpStartDate: item.assignedAt ?? item.createdAt,
+      supervisor: item.supervisor,
+      cycle: item.cycle,
+      scheduledCount: allForStats.filter((row) => row.employeeId === item.employeeId).length,
+    })),
+    selectedEmployee: selectedEmployee
+      ? {
+          ...selectedEmployee.employee,
+          pdpStatus: selectedEmployee.status,
+          pdpStartDate: selectedEmployee.assignedAt ?? selectedEmployee.createdAt,
+          supervisor: selectedEmployee.supervisor,
+          cycle: selectedEmployee.cycle,
+        }
+      : null,
+    calendarDates: allForStats.map((item) => item.scheduledAt),
+    cycle: cycle ? { id: cycle.id, name: cycle.name, status: cycle.status } : null,
+    page,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize) || 1),
+  };
+}
+
+export async function createOtherMeeting(options: {
+  employeeId: string;
+  supervisorId: string;
+  createdById: string;
+  cycleId?: string | null;
+  batchId?: string | null;
+  title: string;
+  description: string;
+  scheduledAt: Date;
+  location?: string;
+}) {
+  const endAt = defaultEndAt(options.scheduledAt);
+  return prisma.meeting.create({
+    data: {
+      type: MeetingType.OTHER,
+      title: options.title,
+      description: options.description,
+      employeeId: options.employeeId,
+      supervisorId: options.supervisorId,
+      createdById: options.createdById,
+      cycleId: options.cycleId ?? null,
+      batchId: options.batchId ?? null,
+      scheduledAt: options.scheduledAt,
+      endAt,
+      location: options.location ?? "Meeting Room B",
+      status: MeetingStatus.SCHEDULED,
+      participants: {
+        create: [
+          {
+            employeeId: options.employeeId,
+            participantRole: MeetingParticipantRole.EMPLOYEE,
+          },
+          {
+            employeeId: options.supervisorId,
+            participantRole: MeetingParticipantRole.SUPERVISOR,
+          },
+        ],
+      },
+    },
+  });
+}
+
+export async function ensureFollowUpMeetingsForEmployee(options: {
+  employeeId: string;
+  supervisorId: string;
+  createdById: string;
+  cycleId: string;
+  batchId: string;
+  startDate: Date;
+  count?: number;
+}) {
+  const existing = await prisma.meeting.count({
+    where: {
+      employeeId: options.employeeId,
+      cycleId: options.cycleId,
+      type: MeetingType.FOLLOW_UP,
+    },
+  });
+  if (existing > 0) return { created: 0 };
+
+  const count = options.count ?? 5;
+  const first = new Date(options.startDate);
+  first.setHours(10, 30, 0, 0);
+  for (let slot = 1; slot <= count; slot += 1) {
+    const scheduledAt = new Date(first);
+    scheduledAt.setMonth(scheduledAt.getMonth() + (slot - 1));
+    const endAt = defaultEndAt(scheduledAt);
+    await prisma.meeting.create({
+      data: {
+        type: MeetingType.FOLLOW_UP,
+        title: `Follow-up Meeting ${slot}`,
+        employeeId: options.employeeId,
+        supervisorId: options.supervisorId,
+        createdById: options.createdById,
+        cycleId: options.cycleId,
+        batchId: options.batchId,
+        followUpSlot: slot,
+        scheduledAt,
+        endAt,
+        location: "Microsoft Teams",
+        status: MeetingStatus.SCHEDULED,
+        participants: {
+          create: [
+            { employeeId: options.employeeId, participantRole: MeetingParticipantRole.EMPLOYEE },
+            { employeeId: options.supervisorId, participantRole: MeetingParticipantRole.SUPERVISOR },
+          ],
+        },
+      },
+    });
+  }
+  await notifyMeetingParties({
+    type: NotificationType.FOLLOW_UP_SCHEDULED,
+    title: "Follow-up meetings scheduled",
+    message: `${count} follow-up meetings were scheduled after the PDP was assigned.`,
+    meetingId: "",
+    employeeId: options.employeeId,
+    supervisorId: options.supervisorId,
+    notifyHr: true,
+  });
+  return { created: count };
+}
+
+export async function scheduleTypedMeeting(
+  userId: string,
+  type: MeetingType,
+  input: ScheduleTypedMeetingInput
+) {
+  const user = await requireUser(userId);
+  if (user.role !== Role.HR && user.role !== Role.SUPERVISOR) {
+    throw new AppError("Only HR or a supervisor can schedule this meeting", 403);
+  }
+  const cycle = await getActiveCycle();
+  if (!cycle) throw new AppError("There is no active appraisal cycle", 400);
+
+  if (user.role === Role.SUPERVISOR) {
+    const assigned = await prisma.employeeSupervisorAssignment.findFirst({
+      where: { cycleId: cycle.id, supervisorId: user.id, employeeId: input.employeeId },
+    });
+    if (!assigned) throw new AppError("This employee is not assigned to your team", 403);
+  }
+
+  const supervisorAssignment = await prisma.employeeSupervisorAssignment.findUnique({
+    where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: input.employeeId } },
+  });
+  const supervisorId = supervisorAssignment?.supervisorId ?? (user.role === Role.SUPERVISOR ? user.id : null);
+  if (!supervisorId) throw new AppError("Assign a supervisor before scheduling this meeting", 400);
+
+  const batchAssignment = await prisma.employeeBatchAssignment.findUnique({
+    where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: input.employeeId } },
+  });
+
+  if (type === MeetingType.FOLLOW_UP) {
+    const pdp = await prisma.personalDevelopmentPlan.findUnique({
+      where: { cycleId_employeeId: { cycleId: cycle.id, employeeId: input.employeeId } },
+    });
+    if (!pdp) {
+      throw new AppError("Follow-up meetings can only be created for employees with a PDP", 400);
+    }
+  }
+
+  const lastSlot =
+    type === MeetingType.FOLLOW_UP
+      ? (
+          await prisma.meeting.aggregate({
+            where: { employeeId: input.employeeId, cycleId: cycle.id, type: MeetingType.FOLLOW_UP },
+            _max: { followUpSlot: true },
+          })
+        )._max.followUpSlot ?? 0
+      : null;
+  const slot = lastSlot === null ? null : lastSlot + 1;
+  const scheduledAt = input.scheduledAt;
+  const endAt = defaultEndAt(scheduledAt, input.endAt);
+  const employee = await prisma.employee.findUnique({
+    where: { id: input.employeeId },
+    select: { name: true },
+  });
+
+  const created = await prisma.meeting.create({
+    data: {
+      type,
+      title:
+        input.title ??
+        (type === MeetingType.FOLLOW_UP
+          ? `Follow-up Meeting ${slot}`
+          : `Other Meeting — ${employee?.name ?? "Employee"}`),
+      description: input.description ?? null,
+      employeeId: input.employeeId,
+      supervisorId,
+      createdById: user.id,
+      cycleId: cycle.id,
+      batchId: batchAssignment?.batchId ?? null,
+      followUpSlot: slot,
+      isAdditionalFollowUp: type === MeetingType.FOLLOW_UP,
+      scheduledAt,
+      endAt,
+      location: input.location ?? (type === MeetingType.FOLLOW_UP ? "Microsoft Teams" : "Meeting Room B"),
+      status: MeetingStatus.SCHEDULED,
+      participants: {
+        create: [
+          { employeeId: input.employeeId, participantRole: MeetingParticipantRole.EMPLOYEE },
+          { employeeId: supervisorId, participantRole: MeetingParticipantRole.SUPERVISOR },
+        ],
+      },
+    },
+    include: meetingInclude,
+  });
+
+  await notifyMeetingParties({
+    type: type === MeetingType.FOLLOW_UP ? NotificationType.FOLLOW_UP_SCHEDULED : NotificationType.MEETING_INVITATION,
+    title: created.title,
+    message: `${created.title} was scheduled.`,
+    meetingId: created.id,
+    employeeId: created.employeeId,
+    supervisorId: created.supervisorId,
+    notifyHr: true,
+  });
+
+  return serializeMeeting(created, user.id, user.role);
+}
+
+export async function getMeetingCalendar(userId: string, query: MeetingCalendarQuery = {}) {
+  const user = await requireUser(userId);
+  const now = new Date();
+  const year = query.year ?? now.getFullYear();
+  const month = query.month ?? now.getMonth() + 1;
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, month, 1);
+  const where: Prisma.MeetingWhereInput = {
+    scheduledAt: { gte: start, lt: end },
+  };
+  if (user.role === Role.EMPLOYEE) where.employeeId = user.id;
+  else if (user.role === Role.SUPERVISOR) where.supervisorId = user.id;
+  if (query.type && query.type !== "all") where.type = query.type as MeetingType;
+  if (query.status && query.status !== "all") where.status = query.status as MeetingStatus;
+
+  const meetings = await prisma.meeting.findMany({
+    where,
+    include: meetingInclude,
+    orderBy: { scheduledAt: "asc" },
+  });
+
+  const allScoped: Prisma.MeetingWhereInput = {
+    ...(user.role === Role.EMPLOYEE ? { employeeId: user.id } : {}),
+    ...(user.role === Role.SUPERVISOR ? { supervisorId: user.id } : {}),
+  };
+  const [monthAll, totalAll, upcoming, completed, cancelled, participantRows] = await Promise.all([
+    prisma.meeting.count({ where: { ...allScoped, scheduledAt: { gte: start, lt: end } } }),
+    prisma.meeting.count({ where: allScoped }),
+    prisma.meeting.count({
+      where: {
+        ...allScoped,
+        scheduledAt: { gte: now },
+        status: { notIn: [MeetingStatus.COMPLETED, MeetingStatus.CANCELLED] },
+      },
+    }),
+    prisma.meeting.count({ where: { ...allScoped, status: MeetingStatus.COMPLETED } }),
+    prisma.meeting.count({ where: { ...allScoped, status: MeetingStatus.CANCELLED } }),
+    prisma.meetingParticipant.findMany({
+      where: { meeting: allScoped },
+      select: { response: true },
+    }),
+  ]);
+  const accepted = participantRows.filter((item) => item.response === MeetingParticipantResponse.ACCEPTED).length;
+  const attendanceRate = participantRows.length
+    ? Math.round((accepted / participantRows.length) * 1000) / 10
+    : 0;
+
+  const selectedDate = query.date ? new Date(query.date) : null;
+  const dayMeetings = selectedDate
+    ? meetings.filter((item) => item.scheduledAt.toDateString() === selectedDate.toDateString())
+    : [];
+
+  const byDay = new Map<number, { planning: number; followUp: number; other: number }>();
+  for (const meeting of meetings) {
+    const day = meeting.scheduledAt.getDate();
+    const current = byDay.get(day) ?? { planning: 0, followUp: 0, other: 0 };
+    if (meeting.type === MeetingType.PERFORMANCE_PLANNING) current.planning += 1;
+    else if (meeting.type === MeetingType.FOLLOW_UP) current.followUp += 1;
+    else current.other += 1;
+    byDay.set(day, current);
+  }
+
+  return {
+    year,
+    month,
+    stats: {
+      total: totalAll,
+      monthTotal: monthAll,
+      upcoming,
+      completed,
+      cancelled,
+      attendanceRate,
+      participantCount: participantRows.length,
+    },
+    days: [...byDay.entries()].map(([day, counts]) => ({
+      day,
+      total: counts.planning + counts.followUp + counts.other,
+      ...counts,
+    })),
+    meetings: meetings.map((meeting) => serializeMeeting(meeting, user.id, user.role)),
+    selectedDateMeetings: dayMeetings.map((meeting) => serializeMeeting(meeting, user.id, user.role)),
+    upcomingMeetings: meetings
+      .filter(
+        (item) =>
+          item.scheduledAt >= now &&
+          item.status !== MeetingStatus.COMPLETED &&
+          item.status !== MeetingStatus.CANCELLED
+      )
+      .slice(0, 8)
+      .map((meeting) => serializeMeeting(meeting, user.id, user.role)),
+  };
+}
+

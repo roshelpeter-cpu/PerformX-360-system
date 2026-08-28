@@ -9,7 +9,16 @@ import SupervisorDashboardPage from "@/features/dashboard/pages/SupervisorDashbo
 import MyTeamPage from "@/features/supervisor/pages/MyTeamPage";
 import TeamMemberDetailPage from "@/features/supervisor/pages/TeamMemberDetailPage";
 import PlanningMeetingsPage from "@/features/meetings/pages/PlanningMeetingsPage";
+import MeetingDetailPage from "@/features/meetings/pages/MeetingDetailPage";
+import TypedMeetingsPage from "@/features/meetings/pages/TypedMeetingsPage";
+import MeetingCalendarPage from "@/features/meetings/pages/MeetingCalendarPage";
 import NotificationsPage from "@/features/notifications/pages/NotificationsPage";
+import {
+  EmployeePdpPage,
+  HrPdpPage,
+  PdpDetailPage,
+  SupervisorPdpPage,
+} from "@/features/pdp/pages/PdpPages";
 import HrDashboardPage from "@/features/dashboard/pages/HrDashboardPage";
 import LeadershipDashboardPage from "@/features/dashboard/pages/LeadershipDashboardPage";
 import EmployeesPage from "@/features/employees/pages/EmployeesPage";
@@ -86,6 +95,70 @@ function AppRouter() {
             }
           />
           <Route
+            path="/hr/meetings/planning/:meetingId"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <MeetingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings/follow-up"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <TypedMeetingsPage kind="follow-up" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings/follow-up/:meetingId"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <MeetingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings/other"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <TypedMeetingsPage kind="other" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings/other/:meetingId"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <MeetingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/meetings/calendar"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <MeetingCalendarPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/pdp"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <HrPdpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/hr/pdp/:pdpId"
+            element={
+              <ProtectedRoute allowedRoles={["HR"]}>
+                <PdpDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/supervisor/meetings/planning"
             element={
               <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
@@ -94,10 +167,130 @@ function AppRouter() {
             }
           />
           <Route
+            path="/supervisor/meetings/planning/:meetingId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <MeetingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings/follow-up"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <TypedMeetingsPage kind="follow-up" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings/follow-up/:meetingId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <MeetingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings/other"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <TypedMeetingsPage kind="other" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings/other/:meetingId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <MeetingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/meetings/calendar"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <MeetingCalendarPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/pdp"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <SupervisorPdpPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/supervisor/pdp/:pdpId"
+            element={
+              <ProtectedRoute allowedRoles={["SUPERVISOR"]}>
+                <PdpDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/employee/meetings/planning"
             element={
               <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
                 <PlanningMeetingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/planning/:meetingId"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <MeetingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/follow-up"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <TypedMeetingsPage kind="follow-up" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/follow-up/:meetingId"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <MeetingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/other"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <TypedMeetingsPage kind="other" />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/other/:meetingId"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <MeetingDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/meetings/calendar"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <MeetingCalendarPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/employee/pdp"
+            element={
+              <ProtectedRoute allowedRoles={["EMPLOYEE"]}>
+                <EmployeePdpPage />
               </ProtectedRoute>
             }
           />

@@ -2,12 +2,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store/authStore";
 import {
+  confirmPlanningMeetingByHrRequest,
   confirmPlanningMeetingRequest,
+  getPlanningMeetingRequest,
+  listFollowUpMeetingsRequest,
+  listOtherMeetingsRequest,
   listPlanningMeetingsRequest,
   listSchedulableEmployeesRequest,
+  getMeetingCalendarRequest,
   requestPlanningRescheduleRequest,
   reviewPlanningRescheduleRequest,
   savePlanningNotesRequest,
+  scheduleFollowUpMeetingRequest,
+  scheduleOtherMeetingRequest,
   schedulePlanningMeetingRequest,
 } from "../services/meetings.api";
 
@@ -23,6 +30,15 @@ export function usePlanningMeetings(filters: {
     queryKey: ["meetings", "planning", userId, filters],
     queryFn: () => listPlanningMeetingsRequest({ ...filters, pageSize: 10 }),
     enabled: Boolean(userId),
+  });
+}
+
+export function usePlanningMeeting(meetingId?: string) {
+  const userId = useAuthStore((state) => state.user?.id);
+  return useQuery({
+    queryKey: ["meetings", "planning", "detail", userId, meetingId],
+    queryFn: () => getPlanningMeetingRequest(meetingId!),
+    enabled: Boolean(userId && meetingId),
   });
 }
 
@@ -101,6 +117,90 @@ export function useReviewPlanningReschedule() {
   });
 }
 
+export function useConfirmPlanningMeetingByHr() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: confirmPlanningMeetingByHrRequest,
+    onSuccess: () => {
+      invalidateMeetings(queryClient);
+      toast.success("Meeting confirmed");
+    },
+  });
+}
+
+export function useFollowUpMeetings(filters: {
+  page?: number;
+  employeeId?: string;
+  cycleId?: string;
+  pdpStartDate?: string;
+  from?: string;
+  to?: string;
+  status?: string;
+  tab?: string;
+} = {}) {
+  const userId = useAuthStore((state) => state.user?.id);
+  return useQuery({
+    queryKey: ["meetings", "follow-up", userId, filters],
+    queryFn: () => listFollowUpMeetingsRequest({ ...filters, page: filters.page ?? 1 }),
+    enabled: Boolean(userId),
+  });
+}
+
+export function useOtherMeetings(filters: {
+  page?: number;
+  employeeId?: string;
+  cycleId?: string;
+  pdpStartDate?: string;
+  from?: string;
+  to?: string;
+  status?: string;
+  tab?: string;
+} = {}) {
+  const userId = useAuthStore((state) => state.user?.id);
+  return useQuery({
+    queryKey: ["meetings", "other", userId, filters],
+    queryFn: () => listOtherMeetingsRequest({ ...filters, page: filters.page ?? 1 }),
+    enabled: Boolean(userId),
+  });
+}
+
+export function useMeetingCalendar(params: {
+  year?: number;
+  month?: number;
+  type?: string;
+  status?: string;
+  date?: string;
+}) {
+  const userId = useAuthStore((state) => state.user?.id);
+  return useQuery({
+    queryKey: ["meetings", "calendar", userId, params],
+    queryFn: () => getMeetingCalendarRequest(params),
+    enabled: Boolean(userId),
+  });
+}
+
+export function useScheduleFollowUpMeeting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: scheduleFollowUpMeetingRequest,
+    onSuccess: () => {
+      invalidateMeetings(queryClient);
+      toast.success("Follow-up meeting scheduled");
+    },
+  });
+}
+
+export function useScheduleOtherMeeting() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: scheduleOtherMeetingRequest,
+    onSuccess: () => {
+      invalidateMeetings(queryClient);
+      toast.success("Meeting scheduled");
+    },
+  });
+}
+
 export function useSavePlanningNotes() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -111,11 +211,18 @@ export function useSavePlanningNotes() {
       meetingId: string;
       discussionSummary: string;
       decisionsMade: string;
-      previousAppraisalReviewed?: string;
+      previousAppraisalReviewed: string;
+      previousPdpReviewed: string;
+      employeeStrengths: string;
+      employeeWeaknesses: string;
+      departmentObjectives: string;
+      companyObjectives: string;
+      developmentNeeds: string;
       previousAppraisalFindings?: string;
-      employeeStrengths?: string;
-      employeeWeaknesses?: string;
-      performanceObservations?: string;
+      completedGoals?: string;
+      incompleteGoals?: string;
+      carriedForward?: string;
+      additionalComments?: string;
       agreedOutcomes?: string;
     }) => savePlanningNotesRequest(meetingId, body),
     onSuccess: () => {

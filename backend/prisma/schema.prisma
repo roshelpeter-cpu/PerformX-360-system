@@ -61,6 +61,7 @@ model Employee {
   cycleProgress                         EmployeeCycleProgress[]
   appraisalReviews                      AppraisalReview[]              @relation("AppraisalReviewEmployee")
   appraisalReviewsAuthored              AppraisalReview[]              @relation("AppraisalReviewReviewer")
+  pdpEvidenceUploaded                   PdpEvidence[]                  @relation("PdpEvidenceUploader")
 }
 
 model AppraisalCycle {
@@ -385,7 +386,12 @@ model PersonalDevelopmentPlan {
   disagreementMeetingId                                          String?
   employeeAgreedAt                                               DateTime?
   hrReviewedAt                                                   DateTime?
+  assignedAt                                                     DateTime?
+  employeeChangeRequest                                          String?
+  hrChangeRequest                                                String?
+  redirectedReason                                               String?
   goals                                                          PdpGoal[]
+  evidence                                                       PdpEvidence[]
   PdpReviewComment                                               PdpReviewComment[]
   approvedBy                                                     Employee?          @relation("PdpApprovedBy", fields: [approvedById], references: [id])
   batch                                                          AppraisalBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
@@ -409,6 +415,7 @@ model PdpGoal {
   objective        String
   expectedOutcome  String?
   dueDate          DateTime?
+  startDate        DateTime?
   progress         Int                     @default(0)
   status           PdpGoalStatus           @default(NOT_STARTED)
   progressComments String?
@@ -422,9 +429,29 @@ model PdpGoal {
   priority         PdpGoalPriority         @default(MEDIUM)
   successCriteria  String?
   weightage        Float                   @default(0)
+  evidence         PdpEvidence[]
   pdp              PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
 
   @@index([pdpId])
+}
+
+model PdpEvidence {
+  id           String            @id @default(cuid())
+  pdpId        String
+  goalId       String
+  uploadedById String
+  fileName     String
+  storedName   String
+  mimeType     String
+  kind         PdpEvidenceKind   @default(SUPPORTING)
+  status       PdpEvidenceStatus @default(SUBMITTED)
+  createdAt    DateTime          @default(now())
+  goal         PdpGoal           @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  pdp          PersonalDevelopmentPlan @relation(fields: [pdpId], references: [id], onDelete: Cascade)
+  uploadedBy   Employee          @relation("PdpEvidenceUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([pdpId])
+  @@index([goalId])
 }
 
 model AppraisalOutcome {
@@ -612,7 +639,7 @@ model MeetingActionItem {
 }
 
 model PdpReviewComment {
-  id                      String                  @id
+  id                      String                  @id @default(cuid())
   pdpId                   String
   authorId                String
   kind                    PdpReviewKind
@@ -659,6 +686,8 @@ enum NotificationType {
   PDP_EMPLOYEE_RESPONSE
   PDP_CHANGES_REQUESTED
   PDP_INTERVENTION_REQUIRED
+  PDP_ASSIGNED
+  PDP_REDIRECTED
 }
 
 enum NotificationStatus {
@@ -752,15 +781,30 @@ enum PdpStatus {
   PENDING_HR_INTERVENTION
   CHANGES_REQUESTED_BY_HR
   CHANGES_REQUESTED_BY_EMPLOYEE
+  READY_FOR_ASSIGNMENT
+  ASSIGNED
   COMPLETED
 }
 
 enum PdpGoalStatus {
   NOT_STARTED
   IN_PROGRESS
+  UNDER_REVIEW
   COMPLETED
   CARRIED_FORWARD
   REPLACED
+}
+
+enum PdpEvidenceKind {
+  DOCUMENT
+  IMAGE
+  CERTIFICATE
+  SUPPORTING
+}
+
+enum PdpEvidenceStatus {
+  SUBMITTED
+  REVIEWED
 }
 
 enum ActionItemStatus {
@@ -787,6 +831,8 @@ enum PdpReviewKind {
   EMPLOYEE_CHANGE_REQUEST
   SUPERVISOR_NOTE
   HR_INTERVENTION
+  HR_CHANGE_REQUEST
+  SUPERVISOR_REDIRECT
 }
 
 enum PipStatus {

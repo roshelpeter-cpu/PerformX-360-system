@@ -86,6 +86,146 @@ export function reviewPlanningRescheduleRequest(
   );
 }
 
+export function confirmPlanningMeetingByHrRequest(meetingId: string) {
+  return apiRequest<{ success: true; meeting: PlanningMeeting }>(
+    `/meetings/planning/${meetingId}/hr-confirm`,
+    { method: "POST", body: {} }
+  );
+}
+
+export function listFollowUpMeetingsRequest(params: {
+  page?: number;
+  employeeId?: string;
+  cycleId?: string;
+  pdpStartDate?: string;
+  from?: string;
+  to?: string;
+  status?: string;
+  tab?: string;
+} = {}) {
+  return apiRequest<{
+    success: true;
+    meetings: PlanningMeeting[];
+    stats?: {
+      total: number;
+      completed: number;
+      upcoming: number;
+      cancelled: number;
+      rescheduled: number;
+      scheduled: number;
+    };
+    pdpEmployees?: Array<{
+      id: string;
+      employeeId: string;
+      name: string;
+      jobTitle: string | null;
+      department: { id: string; name: string } | null;
+      pdpStatus: string;
+      pdpStartDate: string;
+      supervisor: { id: string; employeeId: string; name: string } | null;
+      scheduledCount: number;
+    }>;
+    calendarDates?: string[];
+    cycle?: { id: string; name: string; status: string } | null;
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  }>(`/meetings/follow-up${toQuery(params)}`);
+}
+
+export function listOtherMeetingsRequest(params: {
+  page?: number;
+  employeeId?: string;
+  cycleId?: string;
+  pdpStartDate?: string;
+  from?: string;
+  to?: string;
+  status?: string;
+  tab?: string;
+} = {}) {
+  return apiRequest<{
+    success: true;
+    meetings: PlanningMeeting[];
+    stats?: {
+      total: number;
+      completed: number;
+      upcoming: number;
+      cancelled: number;
+      rescheduled: number;
+      scheduled: number;
+    };
+    pdpEmployees?: Array<{
+      id: string;
+      employeeId: string;
+      name: string;
+      jobTitle: string | null;
+      department: { id: string; name: string } | null;
+      pdpStatus: string;
+      pdpStartDate: string;
+      supervisor: { id: string; employeeId: string; name: string } | null;
+      scheduledCount: number;
+    }>;
+    calendarDates?: string[];
+    cycle?: { id: string; name: string; status: string } | null;
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  }>(`/meetings/other${toQuery(params)}`);
+}
+
+export function getMeetingCalendarRequest(params: {
+  year?: number;
+  month?: number;
+  type?: string;
+  status?: string;
+  date?: string;
+}) {
+  return apiRequest<{
+    success: true;
+    year: number;
+    month: number;
+    stats: {
+      total: number;
+      monthTotal?: number;
+      upcoming: number;
+      completed: number;
+      cancelled: number;
+      attendanceRate: number;
+      participantCount: number;
+    };
+    days: Array<{ day: number; total: number; planning: number; followUp: number; other: number }>;
+    meetings: PlanningMeeting[];
+    selectedDateMeetings: PlanningMeeting[];
+    upcomingMeetings: PlanningMeeting[];
+  }>(`/meetings/calendar${toQuery(params)}`);
+}
+
+export function scheduleFollowUpMeetingRequest(body: {
+  employeeId: string;
+  scheduledAt: string;
+  location?: string;
+}) {
+  return apiRequest<{ success: true; meeting: PlanningMeeting }>("/meetings/follow-up", {
+    method: "POST",
+    body,
+  });
+}
+
+export function scheduleOtherMeetingRequest(body: {
+  employeeId: string;
+  scheduledAt: string;
+  location?: string;
+  title?: string;
+  description?: string;
+}) {
+  return apiRequest<{ success: true; meeting: PlanningMeeting }>("/meetings/other", {
+    method: "POST",
+    body,
+  });
+}
+
 export function savePlanningNotesRequest(
   meetingId: string,
   body: {
@@ -93,10 +233,17 @@ export function savePlanningNotesRequest(
     decisionsMade: string;
     keyPoints?: string;
     additionalComments?: string;
-    previousAppraisalReviewed?: string;
+    previousAppraisalReviewed: string;
+    previousPdpReviewed: string;
+    employeeStrengths: string;
+    employeeWeaknesses: string;
+    departmentObjectives: string;
+    companyObjectives: string;
+    developmentNeeds: string;
     previousAppraisalFindings?: string;
-    employeeStrengths?: string;
-    employeeWeaknesses?: string;
+    completedGoals?: string;
+    incompleteGoals?: string;
+    carriedForward?: string;
     performanceObservations?: string;
     agreedOutcomes?: string;
   }

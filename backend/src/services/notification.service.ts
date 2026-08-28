@@ -108,6 +108,8 @@ const PDP_TYPES: NotificationType[] = [
   "PDP_EMPLOYEE_RESPONSE",
   "PDP_CHANGES_REQUESTED",
   "PDP_INTERVENTION_REQUIRED",
+  "PDP_ASSIGNED",
+  "PDP_REDIRECTED",
 ];
 
 const REVIEW_TYPES: NotificationType[] = [

@@ -31,13 +31,36 @@ const DEMO_EMPLOYEE_IDS = [
   "EMP000904",
 ] as const;
 
+const GOAL_TITLES = [
+  "Delivery quality",
+  "Collaboration",
+  "Documentation",
+  "Stakeholder communication",
+  "Technical depth",
+  "Time management",
+  "Knowledge sharing",
+  "Incident response",
+  "Customer focus",
+  "Process improvement",
+  "Mentoring",
+  "Risk awareness",
+  "Planning discipline",
+  "Cross-team coordination",
+  "Quality reviews",
+  "Learning goal",
+  "Ownership",
+  "Innovation",
+  "Data-driven decisions",
+  "Service reliability",
+];
+
 async function seedHistoricalOutcomes(
   prisma: SeedClient,
   cycle: { id: string; batches: Array<{ id: string; batchNumber: number }> },
   employees: Array<{ id: string; employeeId: string }>,
   year: number
 ) {
-  const sample = employees.filter((_, index) => index % 17 === year % 7).slice(0, 40);
+  const sample = employees.filter((_, index) => index % 3 !== 2);
   if (sample.length === 0) return;
 
   await prisma.appraisalOutcome.createMany({
@@ -244,8 +267,12 @@ async function createPlanningMeeting(
       decisionsMade: string;
       previousAppraisalReviewed?: string;
       previousAppraisalFindings?: string;
+      previousPdpReviewed?: string;
       employeeStrengths?: string;
       employeeWeaknesses?: string;
+      departmentObjectives?: string;
+      companyObjectives?: string;
+      developmentNeeds?: string;
       performanceObservations?: string;
       agreedOutcomes?: string;
     };
@@ -307,8 +334,19 @@ async function createPlanningMeeting(
         updatedById: options.supervisorId,
         previousAppraisalReviewed: options.notes.previousAppraisalReviewed ?? "",
         previousAppraisalFindings: options.notes.previousAppraisalFindings ?? "",
+        previousPdpObjectives: options.notes.previousPdpReviewed ?? options.notes.performanceObservations ?? "",
+        previousPdpProgress: options.notes.previousPdpReviewed ?? "",
         employeeStrengths: options.notes.employeeStrengths ?? "",
         employeeWeaknesses: options.notes.employeeWeaknesses ?? "",
+        departmentObjectivesNotes:
+          options.notes.departmentObjectives ??
+          "Department priorities for the cycle were discussed and aligned with the employee's role.",
+        companyObjectivesNotes:
+          options.notes.companyObjectives ??
+          "Company objectives for the cycle were reviewed with the employee.",
+        developmentNeedsSummary:
+          options.notes.developmentNeeds ??
+          "Agreed development needs will be reflected in the PDP.",
         performanceObservations: options.notes.performanceObservations ?? "",
         agreedOutcomes: options.notes.agreedOutcomes ?? "",
         decisionsMade: options.notes.decisionsMade,
@@ -368,6 +406,7 @@ async function createPdp(
     employeeAgreedAt?: Date | null;
     hrReviewedAt?: Date | null;
     goalProgress: number;
+    goalCount?: number;
   }
 ) {
   return prisma.personalDevelopmentPlan.create({
@@ -386,26 +425,23 @@ async function createPdp(
       employeeAgreedAt: options.employeeAgreedAt ?? null,
       hrReviewedAt: options.hrReviewedAt ?? null,
       goals: {
-        create: [
-          {
-            title: "Delivery quality",
-            objective: "Maintain agreed quality standards for assigned work.",
-            expectedOutcome: "Fewer defects and clearer documentation.",
-            progress: options.goalProgress,
-            status: options.goalProgress >= 100 ? "COMPLETED" : "IN_PROGRESS",
-            sortOrder: 0,
-            weightage: 50,
-          },
-          {
-            title: "Collaboration",
-            objective: "Improve cross-team communication during the cycle.",
-            expectedOutcome: "Timely updates to supervisor and peers.",
-            progress: Math.max(0, options.goalProgress - 15),
-            status: "IN_PROGRESS",
-            sortOrder: 1,
-            weightage: 50,
-          },
-        ],
+        create: Array.from({ length: options.goalCount ?? 8 }, (_, index) => ({
+          title: GOAL_TITLES[index % GOAL_TITLES.length] + (index >= GOAL_TITLES.length ? ` ${Math.floor(index / GOAL_TITLES.length) + 1}` : ""),
+          objective: `Deliver measurable progress on ${GOAL_TITLES[index % GOAL_TITLES.length].toLowerCase()} during this cycle.`,
+          expectedOutcome: "Agreed KPI met by the review window.",
+          progress: Math.max(0, Math.min(100, options.goalProgress - (index % 7) * 4)),
+          status:
+            options.goalProgress >= 100
+              ? "COMPLETED"
+              : options.goalProgress > 20
+                ? "IN_PROGRESS"
+                : "NOT_STARTED",
+          sortOrder: index,
+          weightage: Number((100 / (options.goalCount ?? 8)).toFixed(2)),
+          developmentArea: index % 2 === 0 ? "Technical" : "Behavioural",
+          measurementKpi: "Supervisor-reviewed evidence at follow-up meetings",
+          priority: index % 9 === 0 ? "HIGH" : index % 4 === 0 ? "LOW" : "MEDIUM",
+        })),
       },
     },
   });
@@ -566,6 +602,7 @@ export async function seedDemoEmployeeScenarios(
     employeeAgreedAt: utcDate(2026, 5, 29),
     approvedAt: utcDate(2026, 5, 30),
     goalProgress: 55,
+    goalCount: 42,
   });
   await createFollowUpMeetings(prisma, {
     employeeId: nethmi.id,
@@ -625,6 +662,7 @@ export async function seedDemoEmployeeScenarios(
     employeeAgreedAt: utcDate(2026, 3, 28),
     approvedAt: utcDate(2026, 3, 30),
     goalProgress: 90,
+    goalCount: 40,
   });
   await createFollowUpMeetings(prisma, {
     employeeId: kevin.id,
@@ -686,6 +724,7 @@ export async function seedDemoEmployeeScenarios(
     employeeAgreedAt: utcDate(2026, 3, 25),
     approvedAt: utcDate(2026, 3, 26),
     goalProgress: 100,
+    goalCount: 45,
   });
   await createFollowUpMeetings(prisma, {
     employeeId: amaya.id,
@@ -775,6 +814,7 @@ export async function seedDemoEmployeeScenarios(
     employeeAgreedAt: utcDate(2026, 3, 26),
     approvedAt: utcDate(2026, 3, 27),
     goalProgress: 40,
+    goalCount: 40,
   });
   await createFollowUpMeetings(prisma, {
     employeeId: ryan.id,
@@ -1064,9 +1104,77 @@ export async function seedCycleHistoriesAndOutcomes(
       supervisors: options.supervisors,
       year: cycle.year,
     });
-    if (cycle.year < 2026) {
-      await seedHistoricalOutcomes(prisma, cycle, options.employees, cycle.year);
+    if (cycle.year >= 2023 && cycle.year <= 2025) {
+      await seedWorkforceYearHistory(prisma, {
+        cycle,
+        employees: options.employees,
+        supervisors: options.supervisors,
+        hrUserId: options.hrUserId,
+        year: cycle.year,
+      });
     }
+  }
+}
+
+async function seedWorkforceYearHistory(
+  prisma: SeedClient,
+  options: {
+    cycle: { id: string; year: number; batches: Array<{ id: string; batchNumber: number }> };
+    employees: Array<{ id: string; employeeId: string; departmentId: string | null }>;
+    supervisors: Array<{ id: string; departmentId: string | null }>;
+    hrUserId: string;
+    year: number;
+  }
+) {
+  const existing = await prisma.personalDevelopmentPlan.findMany({
+    where: { cycleId: options.cycle.id },
+    select: { employeeId: true },
+  });
+  const already = new Set(existing.map((item) => item.employeeId));
+  const remaining = options.employees
+    .filter(
+      (item) =>
+        !already.has(item.id) &&
+        !DEMO_EMPLOYEE_IDS.includes(item.employeeId as (typeof DEMO_EMPLOYEE_IDS)[number])
+    )
+    .slice(0, 250);
+  const supervisorByDept = new Map<string, string>();
+  for (const supervisor of options.supervisors) {
+    if (supervisor.departmentId && !supervisorByDept.has(supervisor.departmentId)) {
+      supervisorByDept.set(supervisor.departmentId, supervisor.id);
+    }
+  }
+  const fallbackSupervisor = options.supervisors[0]?.id;
+  if (!fallbackSupervisor) return;
+
+  for (let index = 0; index < remaining.length; index += 15) {
+    const slice = remaining.slice(index, index + 15);
+    await Promise.all(
+      slice.map((employee, offset) => {
+        const i = index + offset;
+        const pip = i % 14 === 0;
+        const award = !pip && i % 9 === 0;
+        return seedCycleHistoryForEmployee(prisma, {
+          employee: { ...employee, name: employee.employeeId },
+          supervisorId:
+            (employee.departmentId && supervisorByDept.get(employee.departmentId)) ||
+            fallbackSupervisor,
+          hrUserId: options.hrUserId,
+          cycle: options.cycle,
+          year: options.year,
+          skipFollowUps: true,
+          result: {
+            overallResult: pip ? "Needs Improvement" : award ? "Exceeds Expectations" : "Meets Expectations",
+            ratingBand: pip ? "NI" : award ? "EE" : "ME",
+            overallScore: pip ? 2.6 : award ? 4.3 : 3.7,
+            award,
+            bonus: award ? 60000 : 20000,
+            pip,
+            goalProgress: pip ? 50 : award ? 94 : 82,
+          },
+        });
+      })
+    );
   }
 }
 
@@ -1078,6 +1186,7 @@ async function seedCycleHistoryForEmployee(
     hrUserId: string;
     cycle: { id: string; batches: Array<{ id: string; batchNumber: number }> };
     year: number;
+    skipFollowUps?: boolean;
     result: {
       overallResult: string;
       ratingBand: string;
@@ -1090,6 +1199,14 @@ async function seedCycleHistoryForEmployee(
     };
   }
 ) {
+  const existingPdp = await prisma.personalDevelopmentPlan.findUnique({
+    where: {
+      cycleId_employeeId: { cycleId: options.cycle.id, employeeId: options.employee.id },
+    },
+    select: { id: true },
+  });
+  if (existingPdp) return;
+
   const batch = options.cycle.batches[0]!;
   const meeting = await createPlanningMeeting(prisma, {
     employeeId: options.employee.id,
@@ -1126,15 +1243,17 @@ async function seedCycleHistoryForEmployee(
     goalProgress: options.result.goalProgress,
   });
 
-  await createFollowUpMeetings(prisma, {
-    employeeId: options.employee.id,
-    supervisorId: options.supervisorId,
-    hrUserId: options.hrUserId,
-    cycleId: options.cycle.id,
-    batchId: batch.id,
-    count: 3,
-    firstDate: utcDate(options.year, 4, 15),
-  });
+  if (!options.skipFollowUps) {
+    await createFollowUpMeetings(prisma, {
+      employeeId: options.employee.id,
+      supervisorId: options.supervisorId,
+      hrUserId: options.hrUserId,
+      cycleId: options.cycle.id,
+      batchId: batch.id,
+      count: 3,
+      firstDate: utcDate(options.year, 4, 15),
+    });
+  }
 
   await prisma.appraisalReview.createMany({
     data: [
@@ -1454,7 +1573,9 @@ export async function seedDemoEmployeeHistory(
   }
 }
 
-/** Extra 2026 planning meetings so HR/supervisor calendars look established. */
+/** Extra 2026 planning meetings so HR/supervisor calendars look established.
+ * About three quarters of employees have a completed meeting; only ~10 remain
+ * without a scheduled Performance Planning Meeting. */
 export async function seedAdditionalPlanningMeetings(
   prisma: SeedClient,
   options: {
@@ -1463,75 +1584,112 @@ export async function seedAdditionalPlanningMeetings(
     batches: Array<{ id: string; batchNumber: number }>;
   }
 ) {
-  const supervisor = await prisma.employee.findUniqueOrThrow({
-    where: { employeeId: "SUP000001" },
-  });
-  const batch1 = options.batches.find((item) => item.batchNumber === 1);
-  const batch2 = options.batches.find((item) => item.batchNumber === 2);
-  if (!batch1 || !batch2) return;
-
-  const team = await prisma.employeeSupervisorAssignment.findMany({
-    where: { cycleId: options.cycleId, supervisorId: supervisor.id },
+  const assignments = await prisma.employeeSupervisorAssignment.findMany({
+    where: { cycleId: options.cycleId, employee: { role: "EMPLOYEE" } },
     include: {
       employee: { select: { id: true, name: true, employeeId: true, role: true } },
     },
   });
+  const batches = await prisma.employeeBatchAssignment.findMany({
+    where: { cycleId: options.cycleId },
+    select: { employeeId: true, batchId: true },
+  });
+  const batchByEmployee = new Map(batches.map((row) => [row.employeeId, row.batchId]));
 
   const existing = await prisma.meeting.findMany({
     where: {
       cycleId: options.cycleId,
       type: MeetingType.PERFORMANCE_PLANNING,
     },
-    select: { employeeId: true },
+    select: { employeeId: true, status: true },
   });
   const alreadyHasMeeting = new Set(existing.map((item) => item.employeeId));
+  const alreadyCompleted = existing.filter((item) => item.status === MeetingStatus.COMPLETED).length;
 
-  const extras = team
-    .filter(
-      (row) =>
-        row.employee.role === "EMPLOYEE" &&
-        !alreadyHasMeeting.has(row.employee.id) &&
-        !DEMO_EMPLOYEE_IDS.includes(row.employee.employeeId as (typeof DEMO_EMPLOYEE_IDS)[number])
-    )
-    .slice(0, 14);
+  const candidates = assignments.filter(
+    (row) =>
+      row.employee.role === "EMPLOYEE" &&
+      !alreadyHasMeeting.has(row.employee.id) &&
+      batchByEmployee.has(row.employee.id)
+  );
 
-  for (const [index, row] of extras.entries()) {
-    const isRescheduleDemo = index === extras.length - 1;
-    const completed = !isRescheduleDemo && index < 8;
+  const UNSCHEDULED = 10;
+  const unscheduled = candidates.slice(-UNSCHEDULED);
+  const unscheduledIds = new Set(unscheduled.map((row) => row.employee.id));
+  const toCreate = candidates.filter((row) => !unscheduledIds.has(row.employee.id));
+
+  const totalEmployees = assignments.length;
+  const targetCompleted = Math.floor(totalEmployees * 0.75);
+  let completedRemaining = Math.max(0, targetCompleted - alreadyCompleted);
+
+  const rooms = ["Meeting Room A", "Meeting Room B", "Meeting Room C", "Teams / Hybrid", "Board Room"];
+
+  async function chunked<T>(items: T[], size: number, fn: (item: T, index: number) => Promise<void>) {
+    for (let index = 0; index < items.length; index += size) {
+      const slice = items.slice(index, index + size);
+      await Promise.all(slice.map((item, offset) => fn(item, index + offset)));
+    }
+  }
+
+  await chunked(toCreate, 20, async (row, index) => {
+    const completed = completedRemaining > 0;
+    if (completed) completedRemaining -= 1;
+    const isReschedule = !completed && index % 37 === 0;
+    const month = completed ? 3 + (index % 4) : 8;
+    const day = 4 + (index % 22);
+    const hour = 4 + (index % 6);
+    const scheduledAt = new Date(Date.UTC(2026, month, day, hour, 30));
     const meeting = await createPlanningMeeting(prisma, {
       employeeId: row.employee.id,
-      supervisorId: supervisor.id,
+      supervisorId: row.supervisorId,
       hrUserId: options.hrUserId,
       cycleId: options.cycleId,
-      batchId: index % 2 === 0 ? batch1.id : batch2.id,
-      scheduledAt: completed
-        ? utcDate(2026, 4, 8 + index)
-        : utcDate(2026, 9, 2),
+      batchId: batchByEmployee.get(row.employee.id)!,
+      scheduledAt,
       status: completed ? MeetingStatus.COMPLETED : MeetingStatus.SCHEDULED,
+      location: rooms[index % rooms.length],
       title: `Performance Planning Meeting — ${row.employee.name}`,
       notes: completed
         ? {
-            discussionSummary: `Planning discussion completed for ${row.employee.name}. Previous-year results were considered.`,
-            decisionsMade: "Continue to PDP creation for this employee.",
-            previousAppraisalReviewed: "Yes",
-            employeeStrengths: "Reliable delivery in the assigned role.",
-            employeeWeaknesses: "Selected development areas recorded in the PDP.",
-            agreedOutcomes: "Meeting completed.",
+            discussionSummary: `Reviewed previous appraisal records and the last PDP with ${row.employee.name}. Agreed strengths, development needs, and the direction for this cycle.`,
+            decisionsMade: "Proceed to PDP creation using the discussed department and company objectives.",
+            previousAppraisalReviewed:
+              "Previous cycle result, rating band, and supervisor comments were reviewed together.",
+            previousAppraisalFindings: "Performance was used as the baseline for this year's goals.",
+            employeeStrengths: "Reliable delivery and constructive collaboration with the assigned team.",
+            employeeWeaknesses: "Selected development areas will be carried into the PDP.",
+            performanceObservations: "Progress against last year's goals was discussed before setting new ones.",
+            agreedOutcomes: "Meeting completed and recorded.",
           }
         : undefined,
     });
 
-    // Leave one current-cycle meeting as a pending reschedule so HR can review it.
-    if (isRescheduleDemo) {
+    if (completed) {
+      await prisma.employeeCycleProgress.upsert({
+        where: {
+          cycleId_employeeId: { cycleId: options.cycleId, employeeId: row.employee.id },
+        },
+        update: {
+          planningMeetingCompletedAt: scheduledAt,
+          currentStage: BatchWorkflowStage.PDP_CREATION,
+        },
+        create: {
+          employeeId: row.employee.id,
+          cycleId: options.cycleId,
+          batchId: batchByEmployee.get(row.employee.id)!,
+          currentStage: BatchWorkflowStage.PDP_CREATION,
+          planningMeetingCompletedAt: scheduledAt,
+        },
+      });
+    }
+
+    if (isReschedule) {
       await prisma.meeting.update({
         where: { id: meeting.id },
         data: { status: MeetingStatus.RESCHEDULE_REQUESTED },
       });
       await prisma.meetingParticipant.updateMany({
-        where: {
-          meetingId: meeting.id,
-          employeeId: row.employee.id,
-        },
+        where: { meetingId: meeting.id, employeeId: row.employee.id },
         data: {
           response: MeetingParticipantResponse.RESCHEDULE_REQUESTED,
           responseMessage: "Clash with a customer workshop already booked that morning.",
@@ -1558,6 +1716,79 @@ export async function seedAdditionalPlanningMeetings(
           createdAt: utcDate(2026, 8, 26),
         },
       });
+    } else if (!completed && index % 5 === 0) {
+      await prisma.notification.createMany({
+        data: [
+          {
+            type: NotificationType.MEETING_INVITATION,
+            title: "Meeting confirmation required",
+            message: `Performance Planning Meeting — ${row.employee.name} has been scheduled. Please confirm attendance or request a reschedule.`,
+            recipientId: row.employee.id,
+            subjectEmployeeId: row.employee.id,
+            metadata: { meetingId: meeting.id },
+            createdAt: utcDate(2026, 8, 20),
+          },
+          {
+            type: NotificationType.MEETING_INVITATION,
+            title: "Meeting confirmation required",
+            message: `Performance Planning Meeting — ${row.employee.name} has been scheduled. Please confirm attendance or request a reschedule.`,
+            recipientId: row.supervisorId,
+            subjectEmployeeId: row.employee.id,
+            metadata: { meetingId: meeting.id },
+            createdAt: utcDate(2026, 8, 20),
+          },
+        ],
+      });
     }
+  });
+
+  // A small draft PDP so the demo supervisor can resume work later.
+  const supervisor = await prisma.employee.findUnique({ where: { employeeId: "SUP000001" } });
+  if (supervisor) {
+    const draftMember = toCreate.find(
+      (row) =>
+        row.supervisorId === supervisor.id &&
+        !DEMO_EMPLOYEE_IDS.includes(row.employee.employeeId as (typeof DEMO_EMPLOYEE_IDS)[number])
+    );
+    if (draftMember) {
+      const completedMeeting = await prisma.meeting.findFirst({
+        where: {
+          employeeId: draftMember.employee.id,
+          cycleId: options.cycleId,
+          type: MeetingType.PERFORMANCE_PLANNING,
+          status: MeetingStatus.COMPLETED,
+        },
+      });
+      if (completedMeeting) {
+        await createPdp(prisma, {
+          employeeId: draftMember.employee.id,
+          supervisorId: supervisor.id,
+          hrUserId: options.hrUserId,
+          cycleId: options.cycleId,
+          batchId: batchByEmployee.get(draftMember.employee.id)!,
+          status: PdpStatus.DRAFT,
+          planningMeetingId: completedMeeting.id,
+          createdAt: utcDate(2026, 8, 15),
+          goalProgress: 0,
+          goalCount: 10,
+        });
+      }
+    }
+  }
+
+  const extrasToLeaveOpen = await prisma.meeting.findMany({
+    where: {
+      cycleId: options.cycleId,
+      type: MeetingType.PERFORMANCE_PLANNING,
+      status: MeetingStatus.SCHEDULED,
+      employee: { employeeId: { notIn: [...DEMO_EMPLOYEE_IDS] } },
+    },
+    select: { id: true },
+    take: 10,
+    orderBy: { createdAt: "desc" },
+  });
+  if (extrasToLeaveOpen.length > 0) {
+    const ids = extrasToLeaveOpen.map((item) => item.id);
+    await prisma.meeting.deleteMany({ where: { id: { in: ids } } });
   }
 }

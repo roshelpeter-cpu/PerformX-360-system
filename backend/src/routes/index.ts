@@ -6,6 +6,7 @@ import employeeManagementRouter from "./employee-management.routes.js";
 import supervisorTeamRouter from "./supervisor-team.routes.js";
 import meetingRouter from "./meeting.routes.js";
 import appraisalHistoryRouter from "./appraisal-history.routes.js";
+import pdpRouter from "./pdp.routes.js";
 
 const apiRouter = Router();
 
@@ -16,5 +17,6 @@ apiRouter.use("/hr/employees", employeeManagementRouter);
 apiRouter.use("/hr/appraisal-cycles", appraisalCycleRouter);
 apiRouter.use("/meetings", meetingRouter);
 apiRouter.use("/appraisal-history", appraisalHistoryRouter);
+apiRouter.use("/pdp", pdpRouter);
 
 export default apiRouter;

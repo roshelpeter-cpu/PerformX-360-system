@@ -4,6 +4,7 @@ import {
   Bell,
   CalendarRange,
   ChevronDown,
+  FileText,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -49,6 +50,39 @@ function navSectionsForRole(role: string | undefined) {
     icon: CalendarRange,
     end: false,
   };
+  const followUpMeetings = {
+    label: "Follow-up Meetings",
+    to:
+      role === "HR"
+        ? "/hr/meetings/follow-up"
+        : role === "SUPERVISOR"
+          ? "/supervisor/meetings/follow-up"
+          : "/employee/meetings/follow-up",
+    icon: CalendarRange,
+    end: true,
+  };
+  const otherMeetings = {
+    label: "Other Meetings",
+    to:
+      role === "HR"
+        ? "/hr/meetings/other"
+        : role === "SUPERVISOR"
+          ? "/supervisor/meetings/other"
+          : "/employee/meetings/other",
+    icon: CalendarRange,
+    end: true,
+  };
+  const meetingCalendar = {
+    label: "Meeting Calendar",
+    to:
+      role === "HR"
+        ? "/hr/meetings/calendar"
+        : role === "SUPERVISOR"
+          ? "/supervisor/meetings/calendar"
+          : "/employee/meetings/calendar",
+    icon: CalendarRange,
+    end: true,
+  };
 
   if (role === "HR") {
     return [
@@ -61,11 +95,12 @@ function navSectionsForRole(role: string | undefined) {
         heading: "Performance Management",
         items: [
           { label: "Appraisal Cycles", to: "/hr/appraisal-cycles", icon: CalendarRange, end: false },
+          { label: "PDP Management", to: "/hr/pdp", icon: FileText, end: false },
         ],
       },
       {
         heading: "Meeting Management",
-        items: [planningMeetings],
+        items: [planningMeetings, followUpMeetings, otherMeetings, meetingCalendar],
       },
       { heading: "Alerts", items: [notifications] },
     ];
@@ -79,8 +114,12 @@ function navSectionsForRole(role: string | undefined) {
         items: [{ label: "My Team", to: "/supervisor/my-team", icon: Users, end: true }],
       },
       {
+        heading: "PDP MANAGEMENT",
+        items: [{ label: "PDP Creation", to: "/supervisor/pdp", icon: FileText, end: false }],
+      },
+      {
         heading: "Meeting Management",
-        items: [planningMeetings],
+        items: [planningMeetings, followUpMeetings, otherMeetings, meetingCalendar],
       },
       { heading: "Alerts", items: [notifications] },
     ];
@@ -90,8 +129,12 @@ function navSectionsForRole(role: string | undefined) {
     return [
       { heading: "", items: [dashboard] },
       {
+        heading: "PDP MANAGEMENT",
+        items: [{ label: "My PDP", to: "/employee/pdp", icon: FileText, end: false }],
+      },
+      {
         heading: "Meeting Management",
-        items: [planningMeetings],
+        items: [planningMeetings, followUpMeetings, otherMeetings, meetingCalendar],
       },
       { heading: "Alerts", items: [notifications] },
     ];
@@ -199,7 +242,7 @@ export default function DashboardLayout({ children }: Props) {
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                   <input
                     type="search"
-                    placeholder="Search employees, cycle..."
+                    placeholder="Search employees, cycles, meetings..."
                     className="h-10 w-full rounded-xl border border-stone-200 bg-stone-50 pl-10 pr-4 text-sm dark:border-stone-700 dark:bg-stone-950"
                     aria-label="Search"
                   />
